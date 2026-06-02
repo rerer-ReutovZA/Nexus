@@ -238,6 +238,8 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
   // is never allowed — the recovery path would vanish.
   const initialSkipTaskbar = !!config.hideTaskbarIcon && !config.disableTray
 
+  const useVibrancy = !!config.enableVibrancy && process.platform === 'win32'
+
   mainWindow = new BrowserWindow({
     minWidth: 860,
     minHeight: 600,
@@ -246,6 +248,8 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
     x: mainWindowState.x,
     y: mainWindowState.y,
     show: false,
+    transparent: useVibrancy,
+    backgroundColor: useVibrancy ? '#00000000' : undefined,
     // Nexus ships with a custom in-app titlebar (see WindowControls), so
     // the native OS frame is always disabled — there is no user-facing
     // option to re-enable it.
@@ -261,6 +265,12 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
       sandbox: false
     }
   })
+
+  if (useVibrancy) {
+    // 'mica', 'acrylic', 'tabbed' are supported on Win 11
+    mainWindow.setBackgroundMaterial('mica')
+  }
+
   mainWindowState.manage(mainWindow)
 
   mainWindow.on('ready-to-show', () => {

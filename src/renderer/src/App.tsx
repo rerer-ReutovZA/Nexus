@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import './i18n'
 import routes from '@renderer/routes'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useSounds } from '@renderer/hooks/use-sounds'
 import { applyTheme, setNativeTheme } from '@renderer/utils/ipc'
 import { SidebarProvider } from '@renderer/components/ui/sidebar'
 import AppSidebar from '@renderer/components/app-sidebar'
@@ -26,6 +27,8 @@ const App: React.FC = () => {
   const location = useLocation()
   const isHome = location.pathname === '/' || location.pathname.includes('/home')
   const mapBg = resolvedTheme === 'dark' ? mapDark : mapLight
+  
+  useSounds()
 
   useEffect(() => {
     const d1 = attachLogsStore()

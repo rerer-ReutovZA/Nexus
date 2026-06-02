@@ -134,11 +134,28 @@ const Settings: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center justify-between">
             <Label className="text-sm">Тихое автообновление</Label>
             <Switch
               checked={appConfig?.silentAutoUpdate ?? false}
               onCheckedChange={(v) => patchAppConfig({ silentAutoUpdate: v })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">Эффект стекла (Mica/Acrylic)</Label>
+            <Switch
+              checked={appConfig?.enableVibrancy ?? false}
+              onCheckedChange={(v) => {
+                patchAppConfig({ enableVibrancy: v })
+                toast.info('Нужен перезапуск приложения')
+              }}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label className="text-sm">Звуковые эффекты</Label>
+            <Switch
+              checked={appConfig?.enableSounds ?? false}
+              onCheckedChange={(v) => patchAppConfig({ enableSounds: v })}
             />
           </div>
           <div className="text-xs text-muted-foreground">

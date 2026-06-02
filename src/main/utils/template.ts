@@ -32,6 +32,8 @@ export const defaultConfig: AppConfig = {
   silentAutoUpdate: false,
   customThemeCss: '',
   customThemes: [],
+  enableVibrancy: false,
+  enableSounds: false,
   maxLogDays: 7,
   disableGPU: false,
   tgws: {
