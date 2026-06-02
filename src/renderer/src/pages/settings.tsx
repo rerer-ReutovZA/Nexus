@@ -34,7 +34,7 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (editingThemeId) {
       const css = `
-        :root {
+        html, :root {
           --background: ${editTheme.bgColor} !important;
           --card: ${editTheme.cardColor} !important;
           --popover: ${editTheme.cardColor} !important;
@@ -72,48 +72,6 @@ const Settings: React.FC = () => {
     }
   }, [editingThemeId, editTheme])
 
-  // Real-time preview while editing
-  useEffect(() => {
-    if (editingThemeId) {
-      const css = `
-        .${editingThemeId} {
-          --background: ${editTheme.bgColor};
-          --card: ${editTheme.cardColor};
-          --popover: ${editTheme.cardColor};
-          --primary: ${editTheme.primaryColor};
-          --primary-foreground: ${editTheme.bgColor};
-          --foreground: ${editTheme.textColor};
-          --card-foreground: ${editTheme.textColor};
-          --popover-foreground: ${editTheme.textColor};
-          --muted: color-mix(in srgb, ${editTheme.cardColor} 85%, ${editTheme.textColor});
-          --muted-foreground: color-mix(in srgb, ${editTheme.textColor} 70%, transparent);
-          --border: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
-          --stroke: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
-          --input: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
-          --ring: ${editTheme.primaryColor};
-          --stroke-power-on: ${editTheme.primaryColor};
-          --gradient-start-power-on: ${editTheme.primaryColor};
-          --gradient-end-power-on: color-mix(in srgb, ${editTheme.primaryColor} 70%, transparent);
-          --profile-active: color-mix(in srgb, ${editTheme.primaryColor} 20%, transparent);
-          --stroke-profile-active: ${editTheme.primaryColor};
-          --sidebar: ${editTheme.bgColor};
-          --sidebar-foreground: ${editTheme.textColor};
-          --sidebar-border: color-mix(in srgb, ${editTheme.bgColor} 80%, ${editTheme.textColor});
-        }
-      `
-      const id = 'nexus-theme-preview'
-      let el = document.getElementById(id)
-      if (!el) {
-        el = document.createElement('style')
-        el.id = id
-        document.head.appendChild(el)
-      }
-      el.innerHTML = css
-    } else {
-      document.getElementById('nexus-theme-preview')?.remove()
-    }
-  }, [editingThemeId, editTheme])
-
   const addCustomTheme = () => {
     const id = `custom_${Date.now()}`
     const newTheme = {
@@ -132,6 +90,8 @@ const Settings: React.FC = () => {
     setEditingThemeId(t.id)
     setEditTheme({ name: t.name, bgColor: t.bgColor, cardColor: t.cardColor, primaryColor: t.primaryColor, textColor: t.textColor })
     setActiveColorTarget('primaryColor')
+    // Switch to this theme to see live changes
+    patchAppConfig({ appTheme: t.id })
   }
 
   const saveCustomTheme = () => {
@@ -182,7 +142,7 @@ const Settings: React.FC = () => {
             />
           </div>
           <div className="text-xs text-muted-foreground">
-            Версия: v{window.electron.process.env.npm_package_version || '1.8.0'}
+            Версия: v{window.electron.process.env.npm_package_version || '2.0.0'}
           </div>
         </CardContent>
       </Card>
