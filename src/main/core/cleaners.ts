@@ -1,6 +1,5 @@
 import { rmSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { app } from 'electron'
 
 export async function cleanDiscordCache(): Promise<boolean> {
   const roaming = process.env.APPDATA
