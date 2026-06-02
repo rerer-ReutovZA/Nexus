@@ -6,10 +6,14 @@ import { Button } from '@renderer/components/ui/button'
 import { appRelaunch } from '@renderer/utils/ipc'
 import BasePage from '@renderer/components/base/base-page'
 
-const themes: AppTheme[] = ['light', 'dark']
+const themes: AppTheme[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose']
 const themeLabels: Record<AppTheme, string> = {
   light: 'Светлая',
-  dark: 'Тёмная'
+  dark: 'Тёмная',
+  ocean: 'Океан',
+  forest: 'Лес',
+  amethyst: 'Аметист',
+  rose: 'Роза'
 }
 
 const Settings: React.FC = () => {
@@ -25,7 +29,7 @@ const Settings: React.FC = () => {
         <CardContent className="space-y-3">
           <div>
             <Label className="text-sm">Тема</Label>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {themes.map((theme) => (
                 <Button
                   key={theme}

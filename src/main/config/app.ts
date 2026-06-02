@@ -66,10 +66,6 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
   // by merging persisted values *over* the default template.
   appConfig = deepMerge(defaultConfig, appConfig) as AppConfig
 
-  if ((appConfig.appTheme as string) !== 'light' && (appConfig.appTheme as string) !== 'dark') {
-    appConfig = { ...appConfig, appTheme: 'dark' }
-  }
-
   // ---- Per-build "fresh install" reset
   if (persistedBuildId !== __BUILD_ID__) {
     appConfig = {
