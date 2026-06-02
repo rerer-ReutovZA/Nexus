@@ -253,28 +253,32 @@ export async function installAppUpdate(
         "  try { Add-Content -LiteralPath $logPath -Value \"$([DateTime]::Now.ToString('HH:mm:ss.fff')) $m\" } catch {}",
         '}',
         'Log \"watcher started, installerPid=$installerPid exe=$exe\"',
+        // 1) Wait for the original Nexus process to die completely.
+        'while (Get-Process -Name "Nexus" -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }',
+        'Log \"Original Nexus process exited\"',
+        // 2) Wait for the installer to finish.
         '$deadline = (Get-Date).AddMinutes(5)',
         'while ((Get-Date) -lt $deadline) {',
-        '  if (-not (Get-Process -Id $installerPid -ErrorAction SilentlyContinue)) { Log \"installer exited\"; break }',
+        '  if (-not (Get-Process -Id $installerPid -ErrorAction SilentlyContinue)) { Log \"installer PID exited\"; break }',
         '  Start-Sleep -Milliseconds 500',
         '}',
-        'Start-Sleep -Seconds 3',
+        // 3) Wait for potential sub-processes of the installer.
+        'Start-Sleep -Seconds 5',
+        // 4) Wait until the new exe actually exists and is NOT locked.
         '$filePoll = (Get-Date).AddSeconds(60)',
-        'while ((Get-Date) -lt $filePoll -and -not (Test-Path -LiteralPath $exe)) {',
+        'while ((Get-Date) -lt $filePoll) {',
+        '  if (Test-Path -LiteralPath $exe) {',
+        '    try { [IO.File]::OpenWrite($exe).Close(); Log \"File is ready\"; break } catch { Log \"File exists but is locked...\" }',
+        '  }',
         '  Start-Sleep -Milliseconds 500',
         '}',
         'if (-not (Test-Path -LiteralPath $exe)) { Log \"exe missing at $exe — giving up\"; exit 1 }',
+        // 5) Final launch attempt.
         'try {',
         '  Start-Process -FilePath $exe -WorkingDirectory $exeDir',
         '  Log \"Start-Process OK\"',
         '} catch {',
-        '  Log \"Start-Process failed: $_ — trying .NET fallback\"',
-        '  try {',
-        '    [System.Diagnostics.Process]::Start($exe) | Out-Null',
-        '    Log \"Process.Start OK\"',
-        '  } catch {',
-        '    Log \"all relaunch attempts failed: $_\"',
-        '  }',
+        '  Log \"Start-Process failed: $_\"',
         '}'
       ].join('\n')
       const watcherPath = path.join(dir, `Nexus-relaunch-${ts}.ps1`)

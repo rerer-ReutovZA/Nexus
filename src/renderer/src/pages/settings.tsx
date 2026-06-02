@@ -6,7 +6,7 @@ import { Button } from '@renderer/components/ui/button'
 import { appRelaunch } from '@renderer/utils/ipc'
 import BasePage from '@renderer/components/base/base-page'
 import { RefreshCw, Plus, X, Edit3, Trash2, Save } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { HexColorPicker } from 'react-colorful'
 
 const themes: string[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose', 'custom']
@@ -29,6 +29,90 @@ const Settings: React.FC = () => {
   const [editTheme, setEditTheme] = useState({
     name: '', bgColor: '#000000', cardColor: '#1a1a1a', primaryColor: '#ff0000', textColor: '#ffffff'
   })
+
+  // Real-time preview while editing
+  useEffect(() => {
+    if (editingThemeId) {
+      const css = `
+        :root {
+          --background: ${editTheme.bgColor} !important;
+          --card: ${editTheme.cardColor} !important;
+          --popover: ${editTheme.cardColor} !important;
+          --primary: ${editTheme.primaryColor} !important;
+          --primary-foreground: ${editTheme.bgColor} !important;
+          --foreground: ${editTheme.textColor} !important;
+          --card-foreground: ${editTheme.textColor} !important;
+          --popover-foreground: ${editTheme.textColor} !important;
+          --muted: color-mix(in srgb, ${editTheme.cardColor} 85%, ${editTheme.textColor}) !important;
+          --muted-foreground: color-mix(in srgb, ${editTheme.textColor} 70%, transparent) !important;
+          --border: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor}) !important;
+          --stroke: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor}) !important;
+          --input: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor}) !important;
+          --ring: ${editTheme.primaryColor} !important;
+          --stroke-power-on: ${editTheme.primaryColor} !important;
+          --gradient-start-power-on: ${editTheme.primaryColor} !important;
+          --gradient-end-power-on: color-mix(in srgb, ${editTheme.primaryColor} 70%, transparent) !important;
+          --profile-active: color-mix(in srgb, ${editTheme.primaryColor} 20%, transparent) !important;
+          --stroke-profile-active: ${editTheme.primaryColor} !important;
+          --sidebar: ${editTheme.bgColor} !important;
+          --sidebar-foreground: ${editTheme.textColor} !important;
+          --sidebar-border: color-mix(in srgb, ${editTheme.bgColor} 80%, ${editTheme.textColor}) !important;
+        }
+      `
+      const id = 'nexus-theme-preview'
+      let el = document.getElementById(id)
+      if (!el) {
+        el = document.createElement('style')
+        el.id = id
+        document.head.appendChild(el)
+      }
+      el.innerHTML = css
+    } else {
+      document.getElementById('nexus-theme-preview')?.remove()
+    }
+  }, [editingThemeId, editTheme])
+
+  // Real-time preview while editing
+  useEffect(() => {
+    if (editingThemeId) {
+      const css = `
+        .${editingThemeId} {
+          --background: ${editTheme.bgColor};
+          --card: ${editTheme.cardColor};
+          --popover: ${editTheme.cardColor};
+          --primary: ${editTheme.primaryColor};
+          --primary-foreground: ${editTheme.bgColor};
+          --foreground: ${editTheme.textColor};
+          --card-foreground: ${editTheme.textColor};
+          --popover-foreground: ${editTheme.textColor};
+          --muted: color-mix(in srgb, ${editTheme.cardColor} 85%, ${editTheme.textColor});
+          --muted-foreground: color-mix(in srgb, ${editTheme.textColor} 70%, transparent);
+          --border: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
+          --stroke: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
+          --input: color-mix(in srgb, ${editTheme.cardColor} 80%, ${editTheme.textColor});
+          --ring: ${editTheme.primaryColor};
+          --stroke-power-on: ${editTheme.primaryColor};
+          --gradient-start-power-on: ${editTheme.primaryColor};
+          --gradient-end-power-on: color-mix(in srgb, ${editTheme.primaryColor} 70%, transparent);
+          --profile-active: color-mix(in srgb, ${editTheme.primaryColor} 20%, transparent);
+          --stroke-profile-active: ${editTheme.primaryColor};
+          --sidebar: ${editTheme.bgColor};
+          --sidebar-foreground: ${editTheme.textColor};
+          --sidebar-border: color-mix(in srgb, ${editTheme.bgColor} 80%, ${editTheme.textColor});
+        }
+      `
+      const id = 'nexus-theme-preview'
+      let el = document.getElementById(id)
+      if (!el) {
+        el = document.createElement('style')
+        el.id = id
+        document.head.appendChild(el)
+      }
+      el.innerHTML = css
+    } else {
+      document.getElementById('nexus-theme-preview')?.remove()
+    }
+  }, [editingThemeId, editTheme])
 
   const addCustomTheme = () => {
     const id = `custom_${Date.now()}`
