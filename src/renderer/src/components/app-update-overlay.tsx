@@ -29,9 +29,15 @@ export default function AppUpdateOverlay(): React.ReactElement | null {
     }
     check(false)
     const id = window.setInterval(() => check(true), POLL_INTERVAL_MS)
+    
+    // Listen for manual checks
+    const handleManualCheck = () => check(true)
+    window.addEventListener('nexus:checkAppUpdate', handleManualCheck)
+
     return () => {
       cancelled = true
       window.clearInterval(id)
+      window.removeEventListener('nexus:checkAppUpdate', handleManualCheck)
     }
   }, [])
 

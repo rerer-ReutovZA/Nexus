@@ -5,6 +5,7 @@ import { Switch } from '@renderer/components/ui/switch'
 import { Button } from '@renderer/components/ui/button'
 import { appRelaunch } from '@renderer/utils/ipc'
 import BasePage from '@renderer/components/base/base-page'
+import { RefreshCw } from 'lucide-react'
 
 const themes: AppTheme[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose']
 const themeLabels: Record<AppTheme, string> = {
@@ -22,6 +23,26 @@ const Settings: React.FC = () => {
   return (
     <BasePage title="Настройки">
       <div className="px-4 pb-6 space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle>Приложение</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-8 gap-1"
+            onClick={() => window.dispatchEvent(new Event('nexus:checkAppUpdate'))}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Проверить обновления
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="text-xs text-muted-foreground">
+            Версия: v{window.electron.process.env.npm_package_version || '1.7.0'}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Внешний вид</CardTitle>
