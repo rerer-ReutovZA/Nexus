@@ -8,6 +8,7 @@ import BasePage from '@renderer/components/base/base-page'
 import { RefreshCw, Plus, X, Edit3, Trash2, Save } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { HexColorPicker } from 'react-colorful'
+import { toast } from 'sonner'
 
 const themes: string[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose', 'custom']
 const themeLabels: Record<string, string> = {
