@@ -259,6 +259,47 @@ const Zapret: React.FC = () => {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-sm font-medium">Профили настроек</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 sm:grid-cols-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'all', ipsetMode: 'none' } })
+                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
+              }}
+              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
+            >
+              Игры (Низкий пинг)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'disabled', ipsetMode: 'loaded' } })
+                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
+              }}
+              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
+            >
+              Работа / YouTube
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'disabled', ipsetMode: 'none' } })
+                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
+              }}
+              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
+            >
+              Максимальный обход
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-sm font-medium">Дополнительные фильтры</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">

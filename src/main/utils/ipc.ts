@@ -32,6 +32,7 @@ import {
   applyIpListPatch,
   clearIpList,
   restoreIpListBackup,
+  updateCommunityList,
   type IpListPatch
 } from '../core/zapret-iplist'
 import {
@@ -223,6 +224,7 @@ export function registerIpcMainHandlers(): void {
   ))
   ipcMain.handle('zapret:clearIpList', h(() => clearIpList()))
   ipcMain.handle('zapret:restoreIpListBackup', h(() => restoreIpListBackup()))
+  ipcMain.handle('zapret:updateCommunityList', h((url) => updateCommunityList(url as string)))
 
   // ---- Nexus self-update ----------------------------------------------
   ipcMain.handle('app:checkUpdate', h((force) => checkAppUpdate(Boolean(force))))

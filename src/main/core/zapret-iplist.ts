@@ -478,3 +478,25 @@ function writeAtomic(file: string, content: string): void {
   // Windows rename-over-existing-file caveat entirely.
   writeFileSync(file, content, 'utf-8')
 }
+
+export async function updateCommunityList(url: string): Promise<IpListSnapshot> {
+  if (!url) throw new Error('URL не указан')
+  ensureDirOrThrow()
+  ensureBackup()
+  
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Nexus-Updater' }
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const text = await res.text()
+  
+  const fetchedLines = text.split(/\r?\n/).filter(isValidCidr)
+  if (fetchedLines.length === 0) throw new Error('Список пуст или формат не поддерживается')
+
+  const file = listFile()
+  const existing = readLines(file).filter(isValidCidr)
+  const merged = dedup([...existing, ...fetchedLines])
+  
+  writeAtomic(file, merged.join('\r\n') + (merged.length ? '\r\n' : ''))
+  return getIpListSnapshot()
+}

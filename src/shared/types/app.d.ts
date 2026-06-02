@@ -88,6 +88,8 @@ interface ZapretConfig {
   // ISO timestamp + tag the user explicitly dismissed via "Later". The
   // updater will stay quiet for that exact tag until a newer one ships.
   dismissedUpdateTag?: string
+  listUpdateUrl?: string           // Community list URL for auto-update
+  autoUpdateList?: boolean         // Enable background community list auto-update
 }
 
 type CoreStatusState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'

@@ -150,6 +150,8 @@ export const zapretApplyIpListPatch = (patch: IpListPatch): Promise<IpListSnapsh
 export const zapretClearIpList = (): Promise<IpListSnapshot> => invoke('zapret:clearIpList')
 export const zapretRestoreIpListBackup = (): Promise<IpListSnapshot> =>
   invoke('zapret:restoreIpListBackup')
+export const zapretUpdateCommunityList = (url: string): Promise<IpListSnapshot> =>
+  invoke('zapret:updateCommunityList', url)
 
 // ---- Nexus self-update ---------------------------------------------------
 export interface AppUpdateInfo {

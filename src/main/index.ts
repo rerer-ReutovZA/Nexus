@@ -11,6 +11,7 @@ import { createApplicationMenu } from './resolve/menu'
 import { initShortcut } from './resolve/shortcut'
 import { startTgws, stopTgws } from './core/tgws'
 import { startZapret, stopZapret } from './core/zapret'
+import { updateCommunityList } from './core/zapret-iplist'
 import { appLog } from './utils/app-logger'
 import { enableAutoRun, disableAutoRun } from './sys/autoRun'
 import { isRunningAsAdmin } from './utils/elevation'
@@ -95,6 +96,20 @@ app.whenReady().then(async () => {
       appLog('error', `Автозапуск Zapret упал: ${e}`)
       showError('Zapret start failed', `${e}`)
     })
+  }
+
+  if (appConfig.zapret?.autoUpdateList && appConfig.zapret?.listUpdateUrl) {
+    appLog('info', 'Запуск фонового обновления списков IP')
+    // 12 hours interval for updates
+    setInterval(() => {
+      updateCommunityList(appConfig.zapret!.listUpdateUrl!)
+        .then(() => appLog('info', 'Список IP успешно обновлен в фоне'))
+        .catch((e) => appLog('error', `Ошибка обновления списка IP: ${e}`))
+    }, 12 * 60 * 60 * 1000)
+    // Also trigger one immediately on startup, without blocking
+    updateCommunityList(appConfig.zapret.listUpdateUrl)
+        .then(() => appLog('info', 'Список IP (startup) успешно обновлен'))
+        .catch((e) => appLog('error', `Ошибка обновления списка IP (startup): ${e}`))
   }
 
   // Synchronise Windows auto-launch with the saved config — keeps the toggle

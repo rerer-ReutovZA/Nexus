@@ -18,9 +18,13 @@ import {
   zapretApplyIpListPatch,
   zapretClearIpList,
   zapretRestoreIpListBackup,
+  zapretUpdateCommunityList,
+  patchAppConfig,
   type CuratedIpSet,
   type IpListSnapshot
 } from '@renderer/utils/ipc'
+import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { Switch } from '@renderer/components/ui/switch'
 
 interface Props {
   disabled?: boolean
@@ -28,6 +32,8 @@ interface Props {
 }
 
 const ZapretIpListCard: React.FC<Props> = ({ disabled = false, disabledReason }) => {
+  const { appConfig } = useAppConfig()
+  const zapret = appConfig?.zapret
   const [open, setOpen] = useState(false)
   const [snapshot, setSnapshot] = useState<IpListSnapshot | null>(null)
   const [sets, setSets] = useState<CuratedIpSet[]>([])
@@ -64,6 +70,31 @@ const ZapretIpListCard: React.FC<Props> = ({ disabled = false, disabledReason })
       else next.add(id)
       return next
     })
+  }
+
+  const updateCommunity = async (): Promise<void> => {
+    if (busy) return
+    if (!zapret?.listUpdateUrl) {
+      toast.error('URL списка не настроен')
+      return
+    }
+    setBusy(true)
+    const tId = toast.loading('Загрузка списка из сети…')
+    try {
+      const snap = await zapretUpdateCommunityList(zapret.listUpdateUrl)
+      setSnapshot(snap)
+      toast.success(`Список обновлен — теперь ${snap.total} запис${endingFor(snap.total)}`, {
+        id: tId,
+        style: POWER_ON_BANNER_STYLE
+      })
+    } catch (e) {
+      toast.error('Не удалось скачать список', {
+        id: tId,
+        description: e instanceof Error ? e.message : String(e)
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   const apply = async (mode: 'append' | 'replace'): Promise<void> => {
@@ -213,6 +244,46 @@ const ZapretIpListCard: React.FC<Props> = ({ disabled = false, disabledReason })
                       </label>
                     )
                   })}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  Community Lists (Автообновление)
+                </div>
+                <div className="flex flex-col gap-3 rounded-md border border-border bg-background/40 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-medium">Синхронизация по URL</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Периодически скачивать списки доменов (например, Antizapret)
+                      </div>
+                    </div>
+                    <Switch
+                      checked={zapret?.autoUpdateList ?? false}
+                      onCheckedChange={(checked) => patchAppConfig({ zapret: { ...zapret!, autoUpdateList: checked } })}
+                      disabled={disabled || busy}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      className="flex-1 h-8 rounded-md border border-border bg-background/60 px-2 text-xs font-mono placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none disabled:opacity-50"
+                      value={zapret?.listUpdateUrl ?? ''}
+                      onChange={(e) => patchAppConfig({ zapret: { ...zapret!, listUpdateUrl: e.target.value } })}
+                      disabled={disabled || busy}
+                      placeholder="https://example.com/list.txt"
+                    />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 shrink-0"
+                      onClick={() => { void updateCommunity() }}
+                      disabled={disabled || busy || !zapret?.listUpdateUrl}
+                    >
+                      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Скачать сейчас'}
+                    </Button>
+                  </div>
                 </div>
               </div>
 

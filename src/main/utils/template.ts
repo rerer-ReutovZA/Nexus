@@ -54,6 +54,8 @@ export const defaultConfig: AppConfig = {
     activeStrategy: undefined,
     gameFilter: 'disabled',
     ipsetMode: 'none',
-    useService: false
+    useService: false,
+    listUpdateUrl: 'https://antizapret.prostovpn.org/domains-export.txt',
+    autoUpdateList: false
   }
 }
