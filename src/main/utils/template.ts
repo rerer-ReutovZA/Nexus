@@ -56,6 +56,11 @@ export const defaultConfig: AppConfig = {
     ipsetMode: 'none',
     useService: false,
     listUpdateUrl: 'https://antizapret.prostovpn.org/domains-export.txt',
-    autoUpdateList: false
+    autoUpdateList: false,
+    profiles: [
+      { id: '1', name: 'Игры (Низкий пинг)', gameFilter: 'all', ipsetMode: 'none' },
+      { id: '2', name: 'Работа / YouTube', gameFilter: 'disabled', ipsetMode: 'loaded' },
+      { id: '3', name: 'Максимальный обход', gameFilter: 'disabled', ipsetMode: 'none' }
+    ]
   }
 }

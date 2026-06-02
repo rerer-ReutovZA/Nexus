@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Download, Loader2, Sparkles, FlaskConical, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { Download, Loader2, Sparkles, FlaskConical, CheckCircle2, XCircle, RefreshCw, Trash2, Edit3, Save, X, Plus } from 'lucide-react'
 import { useZapretStore } from '@renderer/store/zapret-store'
 import { useZapretTestStore } from '@renderer/store/zapret-test-store'
 import {
@@ -12,6 +12,7 @@ import {
   zapretInstallUpdate,
   zapretDismissUpdate,
   zapretRunStrategyTest,
+  appCleanDiscordCache,
   type ZapretUpdateInfo
 } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -40,12 +41,69 @@ const Zapret: React.FC = () => {
   const [installing, setInstalling] = useState(false)
   const installingRef = useRef(false)
   const [checking, setChecking] = useState(false)
+  const [cleaningDiscord, setCleaningDiscord] = useState(false)
+  
+  // ---- Profile editing
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editGameFilter, setEditGameFilter] = useState<'disabled' | 'all' | 'tcp' | 'udp'>('disabled')
+  const [editIpsetMode, setEditIpsetMode] = useState<'none' | 'loaded' | 'any'>('none')
 
   // ---- Strategy test
   const testProgress = useZapretTestStore((s) => s.progress)
   const testReport = useZapretTestStore((s) => s.report)
   const isTestRunning = useZapretTestStore((s) => s.isRunning)
   const autoTestStartedRef = useRef(false)
+
+  const handleCleanDiscordCache = async () => {
+    setCleaningDiscord(true)
+    const tId = toast.loading('Очистка кэша Discord...')
+    try {
+      const ok = await appCleanDiscordCache()
+      if (ok) toast.success('Кэш Discord успешно очищен', { id: tId, style: POWER_ON_BANNER_STYLE })
+      else toast.info('Кэш Discord не найден или уже очищен', { id: tId })
+    } catch (e) {
+      toast.error('Ошибка очистки кэша', { id: tId, description: String(e) })
+    } finally {
+      setCleaningDiscord(false)
+    }
+  }
+
+  const saveProfile = () => {
+    if (!editingProfileId || !zapret?.profiles) return
+    const newProfiles = zapret.profiles.map(p => 
+      p.id === editingProfileId 
+        ? { ...p, name: editName, gameFilter: editGameFilter, ipsetMode: editIpsetMode }
+        : p
+    )
+    patchAppConfig({ zapret: { ...zapret, profiles: newProfiles } })
+    setEditingProfileId(null)
+  }
+
+  const addProfile = () => {
+    const newProfile = {
+      id: Date.now().toString(),
+      name: 'Новый профиль',
+      gameFilter: 'disabled' as const,
+      ipsetMode: 'none' as const
+    }
+    const newProfiles = [...(zapret?.profiles || []), newProfile]
+    patchAppConfig({ zapret: { ...zapret!, profiles: newProfiles } })
+    startEditing(newProfile)
+  }
+
+  const deleteProfile = (id: string) => {
+    if (!zapret?.profiles) return
+    const newProfiles = zapret.profiles.filter(p => p.id !== id)
+    patchAppConfig({ zapret: { ...zapret, profiles: newProfiles } })
+  }
+
+  const startEditing = (p: any) => {
+    setEditingProfileId(p.id)
+    setEditName(p.name)
+    setEditGameFilter(p.gameFilter)
+    setEditIpsetMode(p.ipsetMode)
+  }
 
   const handleCheckUpdate = async (): Promise<void> => {
     if (checking) return
@@ -258,48 +316,92 @@ const Zapret: React.FC = () => {
         />
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Профили настроек</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={addProfile}
+              className="h-8 gap-1 px-2"
+              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
+            >
+              <Plus className="h-4 w-4" />
+              Добавить
+            </Button>
           </CardHeader>
-          <CardContent className="grid gap-2 sm:grid-cols-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'all', ipsetMode: 'none' } })
-                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
-              }}
-              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
-            >
-              Игры (Низкий пинг)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'disabled', ipsetMode: 'loaded' } })
-                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
-              }}
-              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
-            >
-              Работа / YouTube
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                patchAppConfig({ zapret: { ...zapret!, gameFilter: 'disabled', ipsetMode: 'none' } })
-                if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
-              }}
-              disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
-            >
-              Максимальный обход
-            </Button>
+          <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {zapret?.profiles?.map(p => (
+              <div key={p.id} className="relative group">
+                {editingProfileId === p.id ? (
+                  <div className="flex flex-col gap-2 p-2 border rounded-md bg-muted/50 relative z-10">
+                    <input
+                      className="h-7 text-xs px-2 border rounded"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Имя профиля"
+                    />
+                    <select
+                      className="h-7 text-xs px-2 border rounded bg-background"
+                      value={editGameFilter}
+                      onChange={(e) => setEditGameFilter(e.target.value as any)}
+                    >
+                      <option value="disabled">Game: Disabled</option>
+                      <option value="all">Game: TCP+UDP</option>
+                      <option value="tcp">Game: TCP</option>
+                      <option value="udp">Game: UDP</option>
+                    </select>
+                    <select
+                      className="h-7 text-xs px-2 border rounded bg-background"
+                      value={editIpsetMode}
+                      onChange={(e) => setEditIpsetMode(e.target.value as any)}
+                    >
+                      <option value="none">IPSet: None</option>
+                      <option value="loaded">IPSet: Loaded</option>
+                      <option value="any">IPSet: Any</option>
+                    </select>
+                    <div className="flex gap-1 mt-1">
+                      <Button size="sm" variant="default" className="h-6 flex-1 text-xs" onClick={saveProfile}>
+                        <Save className="w-3 h-3 mr-1" /> Сохранить
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setEditingProfileId(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start pr-12 relative"
+                    onClick={() => {
+                      patchAppConfig({ zapret: { ...zapret!, gameFilter: p.gameFilter, ipsetMode: p.ipsetMode } })
+                      if (status.state === 'running') toast.info('Перезапустите Zapret для применения профиля')
+                    }}
+                    disabled={isTestRunning || status.state === 'starting' || status.state === 'stopping'}
+                  >
+                    <span className="truncate">{p.name}</span>
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); startEditing(p); }}
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="p-1 hover:bg-destructive/20 rounded text-muted-foreground hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteProfile(p.id); }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </Button>
+                )}
+              </div>
+            ))}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Дополнительные фильтры</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -351,6 +453,30 @@ const Zapret: React.FC = () => {
             : 'Подождите завершения переключения Zapret'
         }
       />
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Утилиты</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3">
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium">Очистка кэша Discord</div>
+              <div className="text-[11px] text-muted-foreground">
+                Помогает, если не грузятся аватарки или интерфейс после включения обхода.
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleCleanDiscordCache}
+              disabled={cleaningDiscord}
+            >
+              {cleaningDiscord ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Очистить кэш'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader

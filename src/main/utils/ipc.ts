@@ -46,6 +46,7 @@ import {
   dismissAppUpdate
 } from '../core/app-updater'
 import { pingServices } from '../core/ping'
+import { cleanDiscordCache } from '../core/cleaners'
 import { execFile } from 'node:child_process'
 import { writeFileSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
@@ -183,6 +184,7 @@ export function registerIpcMainHandlers(): void {
   ipcMain.handle('shell:openTelegramLink', h((url) => openTelegramLink(url as string)))
   ipcMain.handle('clipboard:writeText', h((text) => { clipboard.writeText(text as string) }))
   ipcMain.handle('net:pingServices', h(() => pingServices()))
+  ipcMain.handle('app:cleanDiscordCache', h(() => cleanDiscordCache()))
 
   // ---- TG WS Proxy --------------------------------------------------------
   ipcMain.handle('tgws:status', h(() => getTgwsStatus()))

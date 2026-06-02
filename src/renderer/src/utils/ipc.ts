@@ -180,6 +180,7 @@ export const appDismissUpdate = (tag: string): Promise<void> =>
 // ---- App control ------------------------------------------------------------
 export const appQuit = (): Promise<void> => invoke('app:quit')
 export const appRelaunch = (): Promise<void> => invoke('app:relaunch')
+export const appCleanDiscordCache = (): Promise<boolean> => invoke('app:cleanDiscordCache')
 
 // Deprecated legacy stubs used by components we haven't pruned yet.
 export const needsFirstRunAdmin = async (): Promise<boolean> => false

@@ -73,12 +73,20 @@ interface TgwsConfig {
   dismissedUpdateTag?: string
 }
 
+interface ZapretProfile {
+  id: string
+  name: string
+  gameFilter: 'disabled' | 'all' | 'tcp' | 'udp'
+  ipsetMode: 'none' | 'loaded' | 'any'
+}
+
 interface ZapretConfig {
   enabled: boolean
   autoStart?: boolean
   activeStrategy?: string          // file name of the .bat strategy
   gameFilter?: 'disabled' | 'all' | 'tcp' | 'udp'
   ipsetMode?: 'none' | 'loaded' | 'any'
+  profiles?: ZapretProfile[]       // User-editable profiles
   bundlePath?: string              // override path to unpacked zapret folder
   useService?: boolean             // installed as Windows service
   // Version of the unpacked Flowseal/zapret-discord-youtube bundle in
