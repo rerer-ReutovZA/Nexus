@@ -1,6 +1,6 @@
 {
   "name": "nexus",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "whymeow",
   "main": "./out/main/index.js",
   "author": "Nexus",
@@ -44,6 +44,7 @@
     "motion": "^12.38.0",
     "plist": "^3.1.0",
     "radix-ui": "^1.4.3",
+    "react-colorful": "^5.7.0",
     "react-i18next": "^17.0.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",

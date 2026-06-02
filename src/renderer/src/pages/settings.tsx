@@ -7,6 +7,7 @@ import { appRelaunch } from '@renderer/utils/ipc'
 import BasePage from '@renderer/components/base/base-page'
 import { RefreshCw, Plus, X, Edit3, Trash2, Save } from 'lucide-react'
 import { useState } from 'react'
+import { HexColorPicker } from 'react-colorful'
 
 const themes: string[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose', 'custom']
 const themeLabels: Record<string, string> = {
@@ -24,6 +25,7 @@ const Settings: React.FC = () => {
   const customThemes = appConfig?.customThemes || []
   
   const [editingThemeId, setEditingThemeId] = useState<string | null>(null)
+  const [activeColorPart, setActiveColorTarget] = useState<'bgColor' | 'cardColor' | 'primaryColor' | 'textColor'>('primaryColor')
   const [editTheme, setEditTheme] = useState({
     name: '', bgColor: '#000000', cardColor: '#1a1a1a', primaryColor: '#ff0000', textColor: '#ffffff'
   })
@@ -33,8 +35,8 @@ const Settings: React.FC = () => {
     const newTheme = {
       id,
       name: 'Новая тема',
-      bgColor: '#111111',
-      cardColor: '#222222',
+      bgColor: '#0a0a0a',
+      cardColor: '#141414',
       primaryColor: '#00ffcc',
       textColor: '#ffffff'
     }
@@ -45,6 +47,7 @@ const Settings: React.FC = () => {
   const startEditingTheme = (t: any) => {
     setEditingThemeId(t.id)
     setEditTheme({ name: t.name, bgColor: t.bgColor, cardColor: t.cardColor, primaryColor: t.primaryColor, textColor: t.textColor })
+    setActiveColorTarget('primaryColor')
   }
 
   const saveCustomTheme = () => {
@@ -61,6 +64,13 @@ const Settings: React.FC = () => {
     if (appConfig?.appTheme === id) {
       patchAppConfig({ appTheme: 'dark' })
     }
+  }
+
+  const colorLabels = {
+    bgColor: 'Фон',
+    cardColor: 'Карточки',
+    primaryColor: 'Акцент',
+    textColor: 'Текст'
   }
 
   return (
@@ -102,8 +112,8 @@ const Settings: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label className="text-sm">Встроенные темы</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <Label className="text-sm text-muted-foreground mb-2 block">Встроенные темы</Label>
+            <div className="flex flex-wrap gap-2">
               {themes.map((theme) => (
                 <Button
                   key={theme}
@@ -118,53 +128,72 @@ const Settings: React.FC = () => {
           </div>
           
           {customThemes.length > 0 && (
-            <div className="pt-2 border-t mt-3">
-              <Label className="text-sm">Мои палитры</Label>
-              <div className="flex flex-wrap gap-2 mt-2">
+            <div className="pt-4 border-t mt-3">
+              <Label className="text-sm text-muted-foreground mb-3 block">Мои палитры</Label>
+              <div className="grid grid-cols-1 gap-3">
                 {customThemes.map((t) => (
-                  <div key={t.id} className="relative group">
+                  <div key={t.id} className="relative">
                     {editingThemeId === t.id ? (
-                       <div className="flex flex-col gap-2 p-3 border rounded-md bg-muted/50 w-[240px]">
-                         <input 
-                           className="h-8 text-xs px-2 border rounded bg-background" 
-                           value={editTheme.name} 
-                           onChange={e => setEditTheme({...editTheme, name: e.target.value})}
-                           placeholder="Название"
-                         />
-                         <div className="grid grid-cols-2 gap-2 text-xs">
-                           <label className="flex flex-col gap-1">Фон <input type="color" value={editTheme.bgColor} onChange={e => setEditTheme({...editTheme, bgColor: e.target.value})} className="h-6 w-full cursor-pointer" /></label>
-                           <label className="flex flex-col gap-1">Карточки <input type="color" value={editTheme.cardColor} onChange={e => setEditTheme({...editTheme, cardColor: e.target.value})} className="h-6 w-full cursor-pointer" /></label>
-                           <label className="flex flex-col gap-1">Акцент <input type="color" value={editTheme.primaryColor} onChange={e => setEditTheme({...editTheme, primaryColor: e.target.value})} className="h-6 w-full cursor-pointer" /></label>
-                           <label className="flex flex-col gap-1">Текст <input type="color" value={editTheme.textColor} onChange={e => setEditTheme({...editTheme, textColor: e.target.value})} className="h-6 w-full cursor-pointer" /></label>
+                       <div className="flex flex-col md:flex-row gap-6 p-4 border rounded-xl bg-muted/30">
+                         <div className="flex-1 space-y-4">
+                           <div className="space-y-1.5">
+                             <Label className="text-[11px] uppercase font-bold text-muted-foreground">Название темы</Label>
+                             <input 
+                               className="w-full h-9 text-sm px-3 border rounded-md bg-background focus:ring-1 focus:ring-primary outline-none" 
+                               value={editTheme.name} 
+                               onChange={e => setEditTheme({...editTheme, name: e.target.value})}
+                             />
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-2">
+                             {(Object.keys(colorLabels) as Array<keyof typeof colorLabels>).map(key => (
+                               <button
+                                 key={key}
+                                 onClick={() => setActiveColorTarget(key)}
+                                 className={`flex flex-col items-start p-2 border rounded-lg transition-all ${activeColorPart === key ? 'border-primary ring-1 ring-primary bg-background' : 'bg-background/50 border-transparent hover:border-border'}`}
+                               >
+                                 <span className="text-[10px] uppercase opacity-60 mb-1">{colorLabels[key]}</span>
+                                 <div className="flex items-center gap-2 w-full">
+                                   <div className="size-4 rounded-full border border-white/20" style={{ backgroundColor: editTheme[key] }} />
+                                   <span className="text-[11px] font-mono uppercase">{editTheme[key]}</span>
+                                 </div>
+                               </button>
+                             ))}
+                           </div>
+
+                           <div className="flex gap-2 pt-2">
+                              <Button className="flex-1 gap-1.5" onClick={saveCustomTheme}><Save className="w-4 h-4"/> Сохранить</Button>
+                              <Button variant="ghost" size="icon" onClick={() => setEditingThemeId(null)}><X className="w-4 h-4"/></Button>
+                           </div>
                          </div>
-                         <div className="flex gap-1 mt-1">
-                            <Button size="sm" className="h-7 flex-1 text-xs" onClick={saveCustomTheme}><Save className="w-3 h-3 mr-1"/> Сохранить</Button>
-                            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingThemeId(null)}><X className="w-3 h-3"/></Button>
+
+                         <div className="flex flex-col items-center justify-center bg-background/40 rounded-lg p-4 border border-dashed">
+                           <HexColorPicker 
+                             color={editTheme[activeColorPart]} 
+                             onChange={(c) => setEditTheme({ ...editTheme, [activeColorPart]: c })} 
+                           />
+                           <div className="mt-3 text-center">
+                             <span className="text-xs font-semibold">{colorLabels[activeColorPart]}</span>
+                           </div>
                          </div>
                        </div>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant={appConfig?.appTheme === t.id ? 'default' : 'outline'}
-                        className="pr-12 relative"
-                        onClick={() => patchAppConfig({ appTheme: t.id })}
-                      >
-                        {t.name}
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            className="p-1 hover:bg-accent rounded text-muted-foreground hover:text-foreground"
-                            onClick={(e) => { e.stopPropagation(); startEditingTheme(t); }}
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
-                          <button
-                            className="p-1 hover:bg-destructive/20 rounded text-muted-foreground hover:text-destructive"
-                            onClick={(e) => { e.stopPropagation(); deleteCustomTheme(t.id); }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                      <div className="flex items-center gap-2 group">
+                        <Button
+                          variant={appConfig?.appTheme === t.id ? 'default' : 'outline'}
+                          className="flex-1 justify-start h-10 px-4 rounded-xl border-2"
+                          style={appConfig?.appTheme === t.id ? {} : { borderColor: t.primaryColor, backgroundColor: `${t.bgColor}33` }}
+                          onClick={() => patchAppConfig({ appTheme: t.id })}
+                        >
+                          <div className="size-3 rounded-full mr-3" style={{ backgroundColor: t.primaryColor }} />
+                          <span className="font-medium">{t.name}</span>
+                        </Button>
+                        
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                          <Button variant="ghost" size="icon" className="size-8" onClick={() => startEditingTheme(t)}><Edit3 className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => deleteCustomTheme(t.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
-                      </Button>
+                      </div>
                     )}
                   </div>
                 ))}

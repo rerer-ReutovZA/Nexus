@@ -124,8 +124,7 @@ const App: React.FC = () => {
     // blue tint and stays consistent with the new monochrome palette.
     <SidebarProvider
       defaultOpen={false}
-      className="relative w-full h-screen overflow-hidden"
-      style={{ backgroundColor: resolvedTheme === 'dark' ? '#000000' : '#E5E5E5' }}
+      className="relative w-full h-screen overflow-hidden bg-background"
     >
       {appTheme === 'custom' && appConfig?.customThemeCss && (
         <style dangerouslySetInnerHTML={{ __html: appConfig.customThemeCss }} />
