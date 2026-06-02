@@ -8,7 +8,11 @@ import { mainWindow } from '..'
 let insertedCSSKeyMain: string | undefined
 
 export function setNativeTheme(theme: AppTheme): void {
-  nativeTheme.themeSource = theme
+  if (theme === 'light' || theme === 'dark') {
+    nativeTheme.themeSource = theme
+  } else {
+    nativeTheme.themeSource = 'dark'
+  }
 }
 
 export async function resolveThemes(): Promise<{ key: string; label: string }[]> {
