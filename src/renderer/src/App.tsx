@@ -98,6 +98,9 @@ const App: React.FC = () => {
       className="relative w-full h-screen overflow-hidden"
       style={{ backgroundColor: resolvedTheme === 'dark' ? '#000000' : '#E5E5E5' }}
     >
+      {appTheme === 'custom' && appConfig?.customThemeCss && (
+        <style dangerouslySetInnerHTML={{ __html: appConfig.customThemeCss }} />
+      )}
       <img
         src={mapBg}
         alt=""

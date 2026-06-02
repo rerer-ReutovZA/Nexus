@@ -1,4 +1,4 @@
-type AppTheme = 'light' | 'dark' | 'ocean' | 'forest' | 'amethyst' | 'rose'
+type AppTheme = 'light' | 'dark' | 'ocean' | 'forest' | 'amethyst' | 'rose' | 'custom'
 type CoreSource = 'tgws' | 'zapret' | 'app'
 
 // Unified log line shown in the Logs page. Type is the severity-ish level,

@@ -14,6 +14,7 @@ interface AppConfig {
   // ---- Appearance & locale
   appTheme: AppTheme
   customTheme?: string
+  customThemeCss?: string          // User's custom CSS theme payload
   disableTray?: boolean
   hideTaskbarIcon?: boolean
   autoLaunch?: boolean
@@ -27,6 +28,7 @@ interface AppConfig {
 
   // ---- Updates
   autoCheckUpdate: boolean
+  silentAutoUpdate?: boolean       // Automatically install updates without asking
   // Tag the user explicitly dismissed via the "Later" button on the
   // full-screen Nexus-update overlay. The overlay stays hidden until
   // GitHub publishes a release with a different tag.

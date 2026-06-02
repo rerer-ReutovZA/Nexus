@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Loader2, Download, Sparkles, X } from 'lucide-react'
 import {
   appCheckUpdate,
@@ -7,14 +7,17 @@ import {
   type AppUpdateInfo
 } from '@renderer/utils/ipc'
 import { Button } from '@renderer/components/ui/button'
+import { useAppConfig } from '@renderer/hooks/use-app-config'
 
 const POLL_INTERVAL_MS = 60 * 60 * 1000 // 1 h
 
 export default function AppUpdateOverlay(): React.ReactElement | null {
+  const { appConfig } = useAppConfig()
   const [info, setInfo] = useState<AppUpdateInfo | null>(null)
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
+  const autoInstalledRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -61,6 +64,14 @@ export default function AppUpdateOverlay(): React.ReactElement | null {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
+
+  // Handle silent auto-update
+  useEffect(() => {
+    if (visible && appConfig?.silentAutoUpdate && !installing && !autoInstalledRef.current && info?.assetUrl) {
+      autoInstalledRef.current = true
+      handleInstall()
+    }
+  }, [visible, appConfig?.silentAutoUpdate, installing, info])
 
   const handleLater = async (): Promise<void> => {
     if (!info?.tag) {

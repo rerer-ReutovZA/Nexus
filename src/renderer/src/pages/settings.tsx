@@ -7,14 +7,15 @@ import { appRelaunch } from '@renderer/utils/ipc'
 import BasePage from '@renderer/components/base/base-page'
 import { RefreshCw } from 'lucide-react'
 
-const themes: AppTheme[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose']
+const themes: AppTheme[] = ['light', 'dark', 'ocean', 'forest', 'amethyst', 'rose', 'custom']
 const themeLabels: Record<AppTheme, string> = {
   light: 'Светлая',
   dark: 'Тёмная',
   ocean: 'Океан',
   forest: 'Лес',
   amethyst: 'Аметист',
-  rose: 'Роза'
+  rose: 'Роза',
+  custom: 'Своя (Custom)'
 }
 
 const Settings: React.FC = () => {
@@ -36,7 +37,14 @@ const Settings: React.FC = () => {
             Проверить обновления
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between mt-2">
+            <Label className="text-sm">Тихое автообновление</Label>
+            <Switch
+              checked={appConfig?.silentAutoUpdate ?? false}
+              onCheckedChange={(v) => patchAppConfig({ silentAutoUpdate: v })}
+            />
+          </div>
           <div className="text-xs text-muted-foreground">
             Версия: v{window.electron.process.env.npm_package_version || '1.7.0'}
           </div>
@@ -63,6 +71,17 @@ const Settings: React.FC = () => {
               ))}
             </div>
           </div>
+          {appConfig?.appTheme === 'custom' && (
+            <div className="mt-4">
+              <Label className="text-sm">CSS-переменные темы</Label>
+              <textarea
+                className="w-full mt-2 h-32 p-2 text-xs font-mono bg-background/50 border rounded-md"
+                placeholder=".custom { --primary: oklch(...); }"
+                value={appConfig?.customThemeCss ?? ''}
+                onChange={(e) => patchAppConfig({ customThemeCss: e.target.value })}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
