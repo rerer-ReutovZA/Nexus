@@ -5,6 +5,7 @@ import { app } from 'electron'
 import { dataDir } from '../utils/dirs'
 import { getAppConfig, patchAppConfig } from '../config'
 import { loadUpdateCache, saveUpdateCache } from '../utils/update-cache'
+import { mainWindow } from '../index'
 
 const REPO = 'rerer-ReutovZA/Nexus'
 const RELEASES_LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
@@ -195,19 +196,40 @@ export async function installAppUpdate(
     throw new Error('Авто-обновление поддерживается только на Windows')
   }
 
-  let buf: Buffer
-  try {
-    const res = await fetch(assetUrl, {
-      headers: { 'User-Agent': REQUEST_HEADERS['User-Agent'] }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const ab = await res.arrayBuffer()
-    buf = Buffer.from(ab)
-  } catch (e) {
-    throw new Error(
-      `Не удалось скачать установщик: ${e instanceof Error ? e.message : String(e)}`
-    )
+  const res = await fetch(assetUrl, {
+    headers: { 'User-Agent': REQUEST_HEADERS['User-Agent'] }
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const total = parseInt(res.headers.get('content-length') || '0', 10)
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('Не удалось начать загрузку')
+
+  let loaded = 0
+  const chunks: Uint8Array[] = []
+  const startTime = Date.now()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    loaded += value.length
+    
+    if (total > 0) {
+      const percent = Math.round((loaded / total) * 100)
+      const elapsed = (Date.now() - startTime) / 1000
+      const speed = elapsed > 0 ? loaded / elapsed : 0 // bytes/s
+      
+      mainWindow?.webContents.send('app:updateProgress', {
+        percent,
+        loaded,
+        total,
+        speed
+      })
+    }
   }
+
+  const buf = Buffer.concat(chunks)
 
   if (buf.length < 5 * 1024 * 1024) {
     throw new Error(`Загруженный файл слишком маленький (${buf.length} байт)`)
@@ -265,9 +287,9 @@ export async function installAppUpdate(
         '  Start-Sleep -Milliseconds 500',
         '}',
         // 3) Grace period for cleanup / sub-processes.
-        'Start-Sleep -Seconds 3',
+        'Start-Sleep -Seconds 5',
         // 4) Wait until the new exe exists and is NOT locked by the installer/system.
-        '$filePoll = (Get-Date).AddSeconds(60)',
+        '$filePoll = (Get-Date).AddSeconds(90)',
         '$ready = $false',
         'while ((Get-Date) -lt $filePoll) {',
         '  if (Test-Path -LiteralPath $exe) {',
