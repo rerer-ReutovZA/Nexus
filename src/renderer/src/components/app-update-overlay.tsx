@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Loader2, Download, Sparkles, X } from 'lucide-react'
+import { Download, Sparkles, X } from 'lucide-react'
 import {
   appCheckUpdate,
   appInstallUpdate,
