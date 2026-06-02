@@ -241,10 +241,12 @@ export async function installAppUpdate(
     try {
       const exePath = process.execPath
       const exeDir = path.dirname(exePath)
+      const currentPid = process.pid
       const ts = Date.now()
       const logPath = path.join(dir, `Nexus-relaunch-${ts}.log`)
       const watcherScript = [
         "$ErrorActionPreference = 'SilentlyContinue'",
+        `$nexusPid = ${currentPid}`,
         `$installerPid = ${installerPid}`,
         `$exe = '${exePath.replace(/'/g, "''")}'`,
         `$exeDir = '${exeDir.replace(/'/g, "''")}'`,
@@ -252,33 +254,44 @@ export async function installAppUpdate(
         'function Log($m) {',
         "  try { Add-Content -LiteralPath $logPath -Value \"$([DateTime]::Now.ToString('HH:mm:ss.fff')) $m\" } catch {}",
         '}',
-        'Log \"watcher started, installerPid=$installerPid exe=$exe\"',
-        // 1) Wait for the original Nexus process to die completely.
-        'while (Get-Process -Name "Nexus" -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }',
+        'Log \"watcher started, nexusPid=$nexusPid installerPid=$installerPid exe=$exe\"',
+        // 1) Wait for THIS Nexus process to exit.
+        'while (Get-Process -Id $nexusPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }',
         'Log \"Original Nexus process exited\"',
-        // 2) Wait for the installer to finish.
+        // 2) Wait for the installer process to finish.
         '$deadline = (Get-Date).AddMinutes(5)',
         'while ((Get-Date) -lt $deadline) {',
         '  if (-not (Get-Process -Id $installerPid -ErrorAction SilentlyContinue)) { Log \"installer PID exited\"; break }',
         '  Start-Sleep -Milliseconds 500',
         '}',
-        // 3) Wait for potential sub-processes of the installer.
-        'Start-Sleep -Seconds 5',
-        // 4) Wait until the new exe actually exists and is NOT locked.
+        // 3) Grace period for cleanup / sub-processes.
+        'Start-Sleep -Seconds 3',
+        // 4) Wait until the new exe exists and is NOT locked by the installer/system.
         '$filePoll = (Get-Date).AddSeconds(60)',
+        '$ready = $false',
         'while ((Get-Date) -lt $filePoll) {',
         '  if (Test-Path -LiteralPath $exe) {',
-        '    try { [IO.File]::OpenWrite($exe).Close(); Log \"File is ready\"; break } catch { Log \"File exists but is locked...\" }',
+        '    try {',
+        '      $fs = [IO.File]::Open($exe, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)',
+        '      $fs.Close()',
+        '      $ready = $true',
+        '      Log \"File is ready and accessible\"',
+        '      break',
+        '    } catch {',
+        '      Log \"File exists but is locked... waiting\"',
+        '    }',
         '  }',
         '  Start-Sleep -Milliseconds 500',
         '}',
-        'if (-not (Test-Path -LiteralPath $exe)) { Log \"exe missing at $exe — giving up\"; exit 1 }',
-        // 5) Final launch attempt.
+        'if (-not $ready) { Log \"exe missing or locked at $exe — giving up\"; exit 1 }',
+        // 5) Launch using multiple methods for reliability.
+        'Log \"Attempting launch...\"',
         'try {',
-        '  Start-Process -FilePath $exe -WorkingDirectory $exeDir',
-        '  Log \"Start-Process OK\"',
+        '  Start-Process -FilePath $exe -WorkingDirectory $exeDir -WindowStyle Normal',
+        '  Log \"Start-Process successful\"',
         '} catch {',
-        '  Log \"Start-Process failed: $_\"',
+        '  Log \"Start-Process failed, trying cmd fallback: $_\"',
+        '  cmd.exe /c \"start \"\" \"$exe\"\"',
         '}'
       ].join('\n')
       const watcherPath = path.join(dir, `Nexus-relaunch-${ts}.ps1`)
