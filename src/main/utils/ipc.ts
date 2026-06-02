@@ -44,6 +44,7 @@ import {
   installAppUpdate,
   dismissAppUpdate
 } from '../core/app-updater'
+import { pingServices } from '../core/ping'
 import { execFile } from 'node:child_process'
 import { writeFileSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
@@ -180,6 +181,7 @@ export function registerIpcMainHandlers(): void {
   // ---- Utility ------------------------------------------------------------
   ipcMain.handle('shell:openTelegramLink', h((url) => openTelegramLink(url as string)))
   ipcMain.handle('clipboard:writeText', h((text) => { clipboard.writeText(text as string) }))
+  ipcMain.handle('net:pingServices', h(() => pingServices()))
 
   // ---- TG WS Proxy --------------------------------------------------------
   ipcMain.handle('tgws:status', h(() => getTgwsStatus()))

@@ -28,6 +28,13 @@ export const openTelegramLink = (url: string): Promise<void> => invoke('shell:op
 export const writeClipboard = (text: string): Promise<void> =>
   invoke('clipboard:writeText', text)
 
+export interface PingResult {
+  service: string
+  status: 'ok' | 'error' | 'timeout'
+  latencyMs?: number
+}
+export const pingServices = (): Promise<PingResult[]> => invoke('net:pingServices')
+
 // ---- TG WS Proxy ------------------------------------------------------------
 export const tgwsStatus = (): Promise<CoreStatus> => invoke('tgws:status')
 export const tgwsStart = (): Promise<void> => invoke('tgws:start')

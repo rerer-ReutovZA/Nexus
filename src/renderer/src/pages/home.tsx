@@ -22,6 +22,8 @@ import { POWER_ON_BANNER_STYLE, BUNDLED_TGWS_VERSION, BUNDLED_ZAPRET_VERSION } f
 import { RotateCw, Sparkles, X } from 'lucide-react'
 import Power from '@renderer/assets/on_icon.svg'
 import Pause from '@renderer/assets/pause_icon.svg'
+import { StatusChecker } from '@renderer/components/status-checker'
+import { TrafficChart } from '@renderer/components/traffic-chart'
 
 interface PowerToggleProps {
   label: string
@@ -359,7 +361,13 @@ const Home: React.FC = () => {
             }
           />
         </div>
-        <div className="flex justify-center pt-8 pb-8">
+        
+        <div className="px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <StatusChecker />
+          <TrafficChart />
+        </div>
+
+        <div className="flex justify-center pb-8">
           <Button
             variant="outline"
             size="sm"
