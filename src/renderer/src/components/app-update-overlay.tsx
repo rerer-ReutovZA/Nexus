@@ -8,6 +8,7 @@ import {
 } from '@renderer/utils/ipc'
 import { Button } from '@renderer/components/ui/button'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { toast } from 'sonner'
 
 const POLL_INTERVAL_MS = 60 * 60 * 1000 // 1 h
 
@@ -21,20 +22,42 @@ export default function AppUpdateOverlay(): React.ReactElement | null {
 
   useEffect(() => {
     let cancelled = false
-    const check = async (force = false): Promise<void> => {
+    const check = async (force = false, isManual = false): Promise<void> => {
+      let tId: string | number | undefined
+      if (isManual) {
+        tId = toast.loading('Поиск обновлений Nexus...')
+      }
       try {
         const next = await appCheckUpdate(force)
-        if (cancelled) return
+        if (cancelled) {
+          if (isManual && tId) toast.dismiss(tId)
+          return
+        }
         setInfo(next)
-      } catch {
-        /* noop — silent in background */
+        
+        if (isManual) {
+          if (next.hasUpdate) {
+            if (appConfig?.silentAutoUpdate) {
+              toast.success(`Найдено обновление: v${next.latest}. Загрузка...`, { id: tId })
+            } else {
+              toast.success(`Найдено обновление: v${next.latest}`, { id: tId })
+            }
+          } else {
+            toast.info('Обновлений не найдено. У вас последняя версия.', { id: tId })
+          }
+        }
+      } catch (e) {
+        if (isManual) {
+          toast.error('Ошибка проверки обновлений', { id: tId, description: String(e) })
+        }
       }
     }
+    
     check(false)
     const id = window.setInterval(() => check(true), POLL_INTERVAL_MS)
     
     // Listen for manual checks
-    const handleManualCheck = () => check(true)
+    const handleManualCheck = () => check(true, true)
     window.addEventListener('nexus:checkAppUpdate', handleManualCheck)
 
     return () => {
@@ -42,7 +65,7 @@ export default function AppUpdateOverlay(): React.ReactElement | null {
       window.clearInterval(id)
       window.removeEventListener('nexus:checkAppUpdate', handleManualCheck)
     }
-  }, [])
+  }, [appConfig?.silentAutoUpdate])
 
   const visible =
     !!info &&

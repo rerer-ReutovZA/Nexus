@@ -89,6 +89,35 @@ const App: React.FC = () => {
     }
   }, [])
 
+  const customThemeObj = appConfig?.customThemes?.find(t => t.id === appTheme)
+
+  const dynamicCustomCss = customThemeObj ? `
+    .${customThemeObj.id} {
+      --background: ${customThemeObj.bgColor};
+      --card: ${customThemeObj.cardColor};
+      --popover: ${customThemeObj.cardColor};
+      --primary: ${customThemeObj.primaryColor};
+      --primary-foreground: ${customThemeObj.bgColor};
+      --foreground: ${customThemeObj.textColor};
+      --card-foreground: ${customThemeObj.textColor};
+      --popover-foreground: ${customThemeObj.textColor};
+      --muted: color-mix(in srgb, ${customThemeObj.cardColor} 85%, ${customThemeObj.textColor});
+      --muted-foreground: color-mix(in srgb, ${customThemeObj.textColor} 70%, transparent);
+      --border: color-mix(in srgb, ${customThemeObj.cardColor} 80%, ${customThemeObj.textColor});
+      --stroke: color-mix(in srgb, ${customThemeObj.cardColor} 80%, ${customThemeObj.textColor});
+      --input: color-mix(in srgb, ${customThemeObj.cardColor} 80%, ${customThemeObj.textColor});
+      --ring: ${customThemeObj.primaryColor};
+      --stroke-power-on: ${customThemeObj.primaryColor};
+      --gradient-start-power-on: ${customThemeObj.primaryColor};
+      --gradient-end-power-on: color-mix(in srgb, ${customThemeObj.primaryColor} 70%, transparent);
+      --profile-active: color-mix(in srgb, ${customThemeObj.primaryColor} 20%, transparent);
+      --stroke-profile-active: ${customThemeObj.primaryColor};
+      --sidebar: ${customThemeObj.bgColor};
+      --sidebar-foreground: ${customThemeObj.textColor};
+      --sidebar-border: color-mix(in srgb, ${customThemeObj.bgColor} 80%, ${customThemeObj.textColor});
+    }
+  ` : ''
+
   return (
     // Dark = pure black (was #080F16, deep navy). Light = neutral light
     // gray (was #C5D4F1, periwinkle blue) so light mode also drops the
@@ -100,6 +129,9 @@ const App: React.FC = () => {
     >
       {appTheme === 'custom' && appConfig?.customThemeCss && (
         <style dangerouslySetInnerHTML={{ __html: appConfig.customThemeCss }} />
+      )}
+      {customThemeObj && (
+        <style dangerouslySetInnerHTML={{ __html: dynamicCustomCss }} />
       )}
       <img
         src={mapBg}

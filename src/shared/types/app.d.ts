@@ -3,6 +3,15 @@ interface AppVersion {
   changelog: string
 }
 
+interface CustomTheme {
+  id: string
+  name: string
+  bgColor: string
+  cardColor: string
+  primaryColor: string
+  textColor: string
+}
+
 interface AppConfig {
   // ---- Migration marker
   configVersion?: number
@@ -14,7 +23,8 @@ interface AppConfig {
   // ---- Appearance & locale
   appTheme: AppTheme
   customTheme?: string
-  customThemeCss?: string          // User's custom CSS theme payload
+  customThemeCss?: string          // Legacy CSS payload (deprecated but kept for migration)
+  customThemes?: CustomTheme[]     // User-created visual themes
   disableTray?: boolean
   hideTaskbarIcon?: boolean
   autoLaunch?: boolean

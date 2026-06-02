@@ -31,6 +31,7 @@ export const defaultConfig: AppConfig = {
   autoCheckUpdate: true,
   silentAutoUpdate: false,
   customThemeCss: '',
+  customThemes: [],
   maxLogDays: 7,
   disableGPU: false,
   tgws: {
