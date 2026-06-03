@@ -179,6 +179,12 @@ function setup(folder, isBuiltin = false) {
   return { onShutdown: () => {} };
 }`);
 
+  // 9. Sound Engine Packs
+  writePlugin('sound-packs', {
+    id: "sound-packs", name: "Sound Engine Packs", version: "1.0.0",
+    description: "Наборы киберпанк-звуков для Nexus", author: "whymeow", entry: "index.js"
+  }, "export function init(context) { return { onShutdown: () => {} }; }");
+
   fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify({ type: "module" }), 'utf8');
 }
 

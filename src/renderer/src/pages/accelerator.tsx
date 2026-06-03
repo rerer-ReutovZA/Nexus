@@ -69,19 +69,30 @@ const AcceleratorPage: React.FC = () => {
   }
 
   const handleToggle = async (enabled: boolean) => {
-    if (enabled && !config.selectedProxy && config.routeMode !== 'bypass') {
-       toast.error('Сначала выберите сервер')
-       return
+    // If turning ON, check requirements
+    if (enabled) {
+      if (!config.selectedProxy && (config.proxies || []).length > 0) {
+        // Auto-select first if none selected
+        update({ selectedProxy: config.proxies![0].id })
+        toast.info('Автоматически выбран первый сервер')
+      } else if (!config.selectedProxy) {
+        toast.error('Добавьте подписку и выберите сервер')
+        return
+      }
     }
+
     setLoading(true)
     try {
       if (!enabled) {
         await window.electron.ipcRenderer.invoke('singbox:stop')
+        toast.success('Ускоритель остановлен')
       } else {
-        await window.electron.ipcRenderer.invoke('singbox:start')
+        const res = await window.electron.ipcRenderer.invoke('singbox:start')
+        if (res.ok) toast.success('Ускоритель запущен')
+        else toast.error('Ошибка запуска', { description: res.message })
       }
     } catch (e) {
-      toast.error('Ошибка ускорителя', { description: String(e) })
+      toast.error('Системная ошибка', { description: String(e) })
     } finally {
       setLoading(false)
       refreshStatus()
@@ -120,9 +131,14 @@ const AcceleratorPage: React.FC = () => {
         update({ proxies: res.value })
         toast.success('Подписка обновлена')
         triggerAllPings(res.value)
+      } else {
+        toast.error('Сбой загрузки')
       }
-    } catch (e) { toast.error('Сбой загрузки') }
-    finally { setLoading(false) }
+    } catch (e) {
+      toast.error('Сбой загрузки')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const getFlagAndName = (name: string): { flag: string, cleanName: string } => {
@@ -300,7 +316,10 @@ const AcceleratorPage: React.FC = () => {
                       <div className="text-xl shrink-0 leading-none select-none">{flag}</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-bold truncate">{cleanName}</p>
-                        <p className="text-[8px] text-muted-foreground truncate opacity-70">{p.type} • {p.address}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] bg-muted px-1 rounded uppercase opacity-70">{p.type}</span>
+                          <span className="text-[8px] text-muted-foreground truncate">{p.address}</span>
+                        </div>
                       </div>
                       <div className="flex flex-col items-end shrink-0 gap-0.5">
                         {ping !== undefined ? (
