@@ -1,1 +1,1 @@
-export function init(context) { context.log('Accelerator interface unlocked.'); return { onShutdown: () => {} }; }
+export function init(context) { return { onShutdown: () => {} }; }

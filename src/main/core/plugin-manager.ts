@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, copyFileSync } from 'fs'
 import path from 'path'
-import { dataDir } from '../utils/dirs'
+import { dataDir, resourcesDir } from '../utils/dirs'
 import { appLog } from '../utils/app-logger'
 import { getAppConfig, patchAppConfig } from '../config'
 import { getZapretStatus, startZapret, stopZapret, listStrategies } from './zapret'
@@ -25,7 +25,36 @@ class PluginManager extends EventEmitter {
 
   public async init(): Promise<void> {
     appLog('info', `[PluginManager] initializing from ${this.pluginsDir}`)
+    await this.syncBuiltinPlugins()
     await this.reloadPlugins()
+  }
+
+  private async syncBuiltinPlugins(): Promise<void> {
+    const builtinDir = path.join(resourcesDir(), 'builtin-plugins')
+    if (!existsSync(builtinDir)) return
+
+    appLog('info', `[PluginManager] syncing builtin plugins from ${builtinDir}`)
+    
+    try {
+      const entries = readdirSync(builtinDir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const src = path.join(builtinDir, entry.name)
+          const dest = path.join(this.pluginsDir, entry.name)
+          
+          if (!existsSync(dest)) {
+            mkdirSync(dest, { recursive: true })
+            const files = readdirSync(src)
+            for (const f of files) {
+              copyFileSync(path.join(src, f), path.join(dest, f))
+            }
+            appLog('info', `[PluginManager] copied builtin plugin: ${entry.name}`)
+          }
+        }
+      }
+    } catch (e) {
+      appLog('error', `[PluginManager] sync failed: ${e}`)
+    }
   }
 
   public async reloadPlugins(): Promise<void> {

@@ -39,6 +39,7 @@ const AcceleratorPage: React.FC = () => {
     selectedProxy: '',
     routeMode: 'all',
     tunMode: false,
+    autoUpdateSub: false,
     selectedProcesses: []
   }
 
@@ -67,14 +68,14 @@ const AcceleratorPage: React.FC = () => {
     patchAppConfig({ accelerator: { ...config, ...patch } })
   }
 
-  const handleToggle = async () => {
-    if (!config.selectedProxy && config.routeMode !== 'bypass') {
+  const handleToggle = async (enabled: boolean) => {
+    if (enabled && !config.selectedProxy && config.routeMode !== 'bypass') {
        toast.error('Сначала выберите сервер')
        return
     }
     setLoading(true)
     try {
-      if (status.state === 'running') {
+      if (!enabled) {
         await window.electron.ipcRenderer.invoke('singbox:stop')
       } else {
         await window.electron.ipcRenderer.invoke('singbox:start')
@@ -83,7 +84,28 @@ const AcceleratorPage: React.FC = () => {
       toast.error('Ошибка ускорителя', { description: String(e) })
     } finally {
       setLoading(false)
+      refreshStatus()
     }
+  }
+
+  const triggerPing = async (proxy: any) => {
+    try {
+      const res = await window.electron.ipcRenderer.invoke('net:pingHost', proxy.address, proxy.port)
+      if (res.ok) {
+        setPings(prev => ({ ...prev, [proxy.id]: res.value.latency }))
+      } else {
+        setPings(prev => ({ ...prev, [proxy.id]: -1 }))
+      }
+    } catch (e) { 
+      setPings(prev => ({ ...prev, [proxy.id]: -1 }))
+    }
+  }
+
+  const triggerAllPings = (proxyList: any[]) => {
+    setPings({})
+    proxyList.forEach((p, i) => {
+      setTimeout(() => triggerPing(p), i * 100)
+    })
   }
 
   const fetchSubscription = async () => {
@@ -97,18 +119,34 @@ const AcceleratorPage: React.FC = () => {
       if (res.ok) {
         update({ proxies: res.value })
         toast.success('Подписка обновлена')
+        triggerAllPings(res.value)
       }
     } catch (e) { toast.error('Сбой загрузки') }
     finally { setLoading(false) }
   }
 
   const getFlagAndName = (name: string): { flag: string, cleanName: string } => {
-    const n = name.toUpperCase()
-    const codes: Record<string, string> = { 'RU': '🇷🇺', 'CZ': '🇨🇿', 'US': '🇺🇸', 'DE': '🇩🇪', 'NL': '🇳🇱', 'SG': '🇸🇬', 'FR': '🇫🇷' }
-    for (const [code, flag] of Object.entries(codes)) {
-      if (n.includes(code)) return { flag, cleanName: name.replace(new RegExp(code, 'gi'), '').replace(/[\[\]\-_:]/g, ' ').trim() }
+    const rawName = name.trim()
+    const flagMap: Record<string, string> = {
+      'RU': '🇷🇺', 'CZ': '🇨🇿', 'US': '🇺🇸', 'DE': '🇩🇪', 'NL': '🇳🇱', 'SG': '🇸🇬', 
+      'FR': '🇫🇷', 'HK': '🇭🇰', 'JP': '🇯🇵', 'PL': '🇵🇱', 'TR': '🇹🇷', 'UA': '🇺🇦',
+      'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺', 'KZ': '🇰🇿', 'BY': '🇧🇾', 'FI': '🇫🇮', 'CH': '🇨🇭'
     }
-    return { flag: '🌐', cleanName: name }
+
+    const prefixMatch = rawName.match(/^[\(\[]?([a-zA-Z]{2})[\)\]]?[\s\-_:]+(.+)$/i)
+    if (prefixMatch) {
+      const code = prefixMatch[1].toUpperCase()
+      if (flagMap[code]) return { flag: flagMap[code], cleanName: prefixMatch[2].trim() }
+    }
+
+    const parts = rawName.split(/[\s\-_:\[\]\(\)]+/)
+    for (const part of parts) {
+      const code = part.toUpperCase()
+      if (flagMap[code]) {
+        return { flag: flagMap[code], cleanName: rawName.replace(new RegExp(part, 'gi'), '').replace(/\s+/g, ' ').trim() }
+      }
+    }
+    return { flag: '🌐', cleanName: rawName }
   }
 
   const addProcess = (name: string) => {
@@ -130,16 +168,17 @@ const AcceleratorPage: React.FC = () => {
     <BasePage 
       title="Ускоритель интернета"
       headerExtra={
-        <Button 
-          size="sm" 
-          variant={status.state === 'running' ? 'destructive' : 'default'}
-          className="h-8 gap-1.5 shadow-lg shadow-primary/20"
-          onClick={handleToggle}
-          disabled={loading}
-        >
-          <Zap className={cn("size-3.5", status.state === 'running' && "fill-current")} />
-          {status.state === 'running' ? 'Отключить' : 'Ускорить сеть'}
-        </Button>
+        <div className="flex items-center gap-3 bg-background/50 px-3 py-1.5 rounded-full border border-stroke shadow-sm">
+           <Zap className={cn("size-3.5", status.state === 'running' ? "text-primary fill-current" : "text-muted-foreground")} />
+           <span className="text-[10px] font-bold uppercase tracking-tight opacity-70">
+              {status.state === 'running' ? 'Активен' : 'Отключен'}
+           </span>
+           <Switch 
+             disabled={loading}
+             checked={status.state === 'running'}
+             onCheckedChange={handleToggle}
+           />
+        </div>
       }
     >
       <div className="px-4 pb-10 space-y-6">
@@ -230,23 +269,50 @@ const AcceleratorPage: React.FC = () => {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+             <div className="flex items-center justify-between bg-primary/5 p-2 rounded-lg border border-primary/10">
+               <div className="flex items-center gap-2 px-1">
+                 <RefreshCw className="size-3 text-primary" />
+                 <span className="text-[10px] font-bold uppercase opacity-80">Авто-обновление списка</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <span className="text-[9px] text-muted-foreground italic mr-1">Раз в час</span>
+                 <Switch 
+                   checked={config.autoUpdateSub || false}
+                   onCheckedChange={v => update({ autoUpdateSub: v })}
+                 />
+               </div>
+            </div>
+
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar border-t pt-4">
                 {(config.proxies || []).map((p: any) => {
                   const { flag, cleanName } = getFlagAndName(p.name)
+                  const ping = pings[p.id]
                   return (
                     <div 
                       key={p.id}
                       onClick={() => update({ selectedProxy: p.id })}
                       className={cn(
                         "p-3 rounded-lg border cursor-pointer transition-all duration-200 flex items-center gap-3",
-                        config.selectedProxy === p.id ? "bg-primary/15 border-primary" : "bg-background/40 border-stroke hover:border-primary/40"
+                        config.selectedProxy === p.id ? "bg-primary/15 border-primary shadow-md" : "bg-background/40 border-stroke hover:border-primary/40"
                       )}
                     >
                       <div className="text-xl shrink-0 leading-none select-none">{flag}</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-bold truncate">{cleanName}</p>
                         <p className="text-[8px] text-muted-foreground truncate opacity-70">{p.type} • {p.address}</p>
+                      </div>
+                      <div className="flex flex-col items-end shrink-0 gap-0.5">
+                        {ping !== undefined ? (
+                          <span className={cn(
+                            "text-[10px] font-mono font-bold",
+                            ping === -1 ? "text-red-500" : ping < 100 ? "text-green-500" : ping < 250 ? "text-yellow-500" : "text-red-500"
+                          )}>
+                            {ping === -1 ? 'Err' : `${ping}ms`}
+                          </span>
+                        ) : (
+                          <div className="size-3 rounded-full border border-primary/30 border-t-transparent animate-spin" />
+                        )}
                       </div>
                     </div>
                   )

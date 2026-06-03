@@ -1,0 +1,8 @@
+{
+  "id": "matrix-dashboard",
+  "name": "Matrix Dashboard",
+  "version": "1.0.0",
+  "description": "Визуализатор трафика в стиле Матрицы",
+  "author": "whymeow",
+  "entry": "index.js"
+}
