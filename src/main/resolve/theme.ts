@@ -1,4 +1,4 @@
-﻿import { copyFile, readdir, readFile, writeFile } from 'fs/promises'
+import { copyFile, readdir, readFile, writeFile } from 'fs/promises'
 import { themesDir } from '../utils/dirs'
 import { nativeTheme } from 'electron'
 import path from 'path'

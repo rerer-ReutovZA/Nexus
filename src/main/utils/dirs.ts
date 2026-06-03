@@ -1,4 +1,4 @@
-﻿import { is } from '@electron-toolkit/utils'
+import { is } from '@electron-toolkit/utils'
 import { existsSync, mkdirSync } from 'fs'
 import { app } from 'electron'
 import path from 'path'
@@ -95,4 +95,14 @@ export function zapretBundleDir(): string {
 
 export function zapretBinaryPath(): string {
   return path.join(zapretBundleDir(), 'bin', 'winws.exe')
+}
+
+export function singboxRuntimeDir(): string {
+  return path.join(runtimeDir(), 'singbox')
+}
+
+export function singboxBinaryPath(): string {
+  const rt = path.join(singboxRuntimeDir(), 'singbox.exe')
+  if (existsSync(rt)) return rt
+  return path.join(resourcesDir(), 'singbox', 'singbox.exe')
 }

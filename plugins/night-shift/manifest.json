@@ -1,0 +1,8 @@
+{
+  "id": "night-shift",
+  "name": "Night Shift",
+  "version": "1.0.0",
+  "description": "Автоматическая темная тема",
+  "author": "whymeow",
+  "entry": "index.js"
+}

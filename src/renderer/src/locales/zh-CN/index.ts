@@ -164,6 +164,7 @@ export default {
     rules: '规则',
     connection: '连接',
     logs: '日志',
+    plugins: '插件',
     domainSniffing: '域名嗅探',
     coreSettings: '内核设置',
     systemProxy: '系统代理',

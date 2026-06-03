@@ -47,6 +47,13 @@ import {
 } from '../core/app-updater'
 import { pingServices } from '../core/ping'
 import { cleanDiscordCache } from '../core/cleaners'
+import {
+  getSingboxStatus,
+  startSingbox,
+  stopSingbox,
+  restartSingbox
+} from '../core/singbox'
+import { pluginManager } from '../core/plugin-manager'
 import { execFile } from 'node:child_process'
 import { writeFileSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
@@ -184,7 +191,59 @@ export function registerIpcMainHandlers(): void {
   ipcMain.handle('shell:openTelegramLink', h((url) => openTelegramLink(url as string)))
   ipcMain.handle('clipboard:writeText', h((text) => { clipboard.writeText(text as string) }))
   ipcMain.handle('net:pingServices', h(() => pingServices()))
+  ipcMain.handle('net:pingHost', h(async (host: string, port: number) => {
+    const { Socket } = await import('node:net')
+    return new Promise((resolve) => {
+      const socket = new Socket()
+      const start = process.hrtime.bigint()
+      
+      const safety = setTimeout(() => {
+        socket.destroy()
+        resolve({ status: 'timeout', latency: -1 })
+      }, 4000)
+
+      socket.setTimeout(3500)
+      
+      const finish = (status: string) => {
+        clearTimeout(safety)
+        const end = process.hrtime.bigint()
+        socket.destroy()
+        const latency = Number(end - start) / 1_000_000
+        // If latency is too low (< 5ms), it's likely a local interception or loopback
+        // We'll add a small 'jitter' or just report it as is, but usually real internet hosts are > 10ms.
+        resolve({ status, latency: status === 'ok' ? Math.round(latency) : -1 })
+      }
+
+      socket.on('connect', () => finish('ok'))
+      socket.on('error', () => finish('error'))
+      socket.on('timeout', () => finish('timeout'))
+      
+      // Disable Nagle's algorithm for more accurate measurement
+      socket.setNoDelay(true)
+      
+      try {
+        socket.connect(port || 443, host)
+      } catch (e) {
+        finish('error')
+      }
+    })
+  }))
   ipcMain.handle('app:cleanDiscordCache', h(() => cleanDiscordCache()))
+  ipcMain.handle('app:getRunningProcesses', h(async () => {
+    if (process.platform !== 'win32') return []
+    const { exec } = await import('node:child_process')
+    return new Promise((resolve) => {
+      exec('tasklist /NH /FO CSV', (err, stdout) => {
+        if (err) return resolve([])
+        const lines = stdout.split('\n').filter(l => l.trim())
+        const names = lines.map(line => {
+          const parts = line.split(',')
+          return parts[0] ? parts[0].replace(/"/g, '') : ''
+        }).filter(n => n.toLowerCase().endsWith('.exe'))
+        resolve([...new Set(names)].sort())
+      })
+    })
+  }))
 
   // ---- TG WS Proxy --------------------------------------------------------
   ipcMain.handle('tgws:status', h(() => getTgwsStatus()))
@@ -234,6 +293,47 @@ export function registerIpcMainHandlers(): void {
     installAppUpdate(url as string, expectedVersion as string | undefined)
   ))
   ipcMain.handle('app:dismissUpdate', h((tag) => dismissAppUpdate(tag as string)))
+
+  // ---- Sing-box -----------------------------------------------------------
+  ipcMain.handle('singbox:status', h(() => getSingboxStatus()))
+  ipcMain.handle('singbox:start', h(() => startSingbox()))
+  ipcMain.handle('singbox:stop', h(() => stopSingbox()))
+  ipcMain.handle('singbox:restart', h(() => restartSingbox()))
+  ipcMain.handle('sub:fetch', h(async (url: string) => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    let text = await res.text()
+    
+    // Try to decode Base64 if needed
+    if (!text.includes('://')) {
+      try { text = Buffer.from(text, 'base64').toString('utf8') } catch { /* ignore */ }
+    }
+
+    const lines = text.split(/\r?\n/).filter(l => l.trim())
+    const proxies = lines.map((line, i) => {
+      try {
+        const urlObj = new URL(line)
+        const name = decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i+1}`
+        return {
+          id: Math.random().toString(36).slice(2),
+          name,
+          type: urlObj.protocol.replace(':', '').toUpperCase(),
+          address: urlObj.hostname,
+          port: parseInt(urlObj.port),
+          uuid: urlObj.username,
+          sni: urlObj.searchParams.get('sni') || '',
+          full: line
+        }
+      } catch { return null }
+    }).filter(Boolean)
+    
+    return proxies
+  }))
+
+  // ---- Plugins ------------------------------------------------------------
+  ipcMain.handle('plugin:list', h(() => pluginManager.getAvailablePlugins()))
+  ipcMain.handle('plugin:reload', h(() => pluginManager.reloadPlugins()))
+  ipcMain.handle('plugin:getDir', h(() => pluginManager.getPluginsDir()))
 
   // ---- Quit / restart -----------------------------------------------------
   ipcMain.handle('app:quit', h(() => app.quit()))

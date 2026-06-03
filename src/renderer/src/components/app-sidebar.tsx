@@ -2,7 +2,17 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from 'next-themes'
-import { Home as HomeIcon, ScrollText, Settings as SettingsIcon, Info as InfoIcon, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { 
+  Home as HomeIcon, 
+  ScrollText, 
+  Settings as SettingsIcon, 
+  Info as InfoIcon, 
+  PanelLeftClose, 
+  PanelLeft, 
+  Puzzle,
+  Zap
+} from 'lucide-react'
 import ZapretIcon from '@renderer/components/zapret-icon'
 import TelegramIcon from '@renderer/components/telegram-icon'
 import logoDark from '@renderer/assets/logo.png'
@@ -20,26 +30,31 @@ import {
   useSidebar
 } from '@renderer/components/ui/sidebar'
 
-const nav = [
-  { key: 'home',     path: '/home',     icon: HomeIcon,     label: 'Главная' },
-  { key: 'telegram', path: '/telegram', icon: TelegramIcon, label: 'Telegram' },
-  { key: 'zapret',   path: '/zapret',   icon: ZapretIcon,   label: 'Zapret' },
-  { key: 'logs',     path: '/logs',     icon: ScrollText,   label: 'Логи' },
-  { key: 'settings', path: '/settings', icon: SettingsIcon, label: 'Настройки' },
-  { key: 'about',    path: '/about',    icon: InfoIcon,     label: 'Информация' }
-]
-
 const AppSidebar: React.FC = () => {
   const { t } = useTranslation()
+  const { appConfig } = useAppConfig()
   const location = useLocation()
   const navigate = useNavigate()
   const { toggleSidebar, state } = useSidebar()
-  // `useTheme` from next-themes is reactive: when the user flips light/dark
-  // in Settings the hook re-renders this component immediately, swapping
-  // the <img src=...> live without an app restart.
   const { resolvedTheme } = useTheme()
   const collapsed = state === 'collapsed'
   const logoSrc = resolvedTheme === 'light' ? logoLight : logoDark
+
+  // Dynamic nav
+  const isAcceleratorEnabled = appConfig?.enabledPlugins?.includes('nexus-accelerator') ?? false
+  
+  const currentNav = [
+    { key: 'home',     path: '/home',     icon: HomeIcon,     label: 'Главная' },
+    { key: 'telegram', path: '/telegram', icon: TelegramIcon, label: 'Telegram' },
+    { key: 'zapret',   path: '/zapret',   icon: ZapretIcon,   label: 'Zapret' },
+    ...(isAcceleratorEnabled ? [
+      { key: 'accelerator', path: '/accelerator', icon: Zap, label: 'Ускоритель' }
+    ] : []),
+    { key: 'plugins',  path: '/plugins',  icon: Puzzle,       label: 'Плагины' },
+    { key: 'logs',     path: '/logs',     icon: ScrollText,   label: 'Логи' },
+    { key: 'settings', path: '/settings', icon: SettingsIcon, label: 'Настройки' },
+    { key: 'about',    path: '/about',    icon: InfoIcon,     label: 'Информация' }
+  ]
 
   return (
     <Sidebar collapsible="icon" side="left" variant="floating">
@@ -55,7 +70,7 @@ const AppSidebar: React.FC = () => {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {nav.map((item) => {
+              {currentNav.map((item) => {
                 const Icon = item.icon
                 const isActive = location.pathname.startsWith(item.path)
                 return (
@@ -68,6 +83,7 @@ const AppSidebar: React.FC = () => {
                     >
                       <Icon className="size-4" />
                       <span>{t(`sider.${item.key}`, { defaultValue: item.label })}</span>
+                      {item.key === 'plugins' && <span className="text-[8px] bg-primary text-primary-foreground px-1 rounded ml-1">NEW</span>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )

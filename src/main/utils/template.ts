@@ -1,4 +1,4 @@
-﻿import { randomBytes } from 'crypto'
+import { randomBytes } from 'crypto'
 
 /**
  * Bump this any time we want to force a partial reset of fields that older
@@ -32,6 +32,33 @@ export const defaultConfig: AppConfig = {
   silentAutoUpdate: false,
   customThemeCss: '',
   customThemes: [],
+  enabledPlugins: [],
+  pluginSettings: {
+    'game-trigger': {
+      processes: 'RobloxPlayerBeta.exe, Steam.exe, Discord.exe, RobloxPlayerLauncher.exe, Dota2.exe',
+      zapretProfile: '1',
+      enableAccelerator: false,
+      checkInterval: 10
+    },
+    'night-shift': {
+      startHour: 23,
+      endHour: 8
+    },
+    'ad-blocker': {
+      blockTracking: true,
+      blockAds: true
+    },
+    'telegram-bot': {
+      token: '',
+      chatId: ''
+    },
+    'matrix-dashboard': {
+      enabled: false
+    },
+    'sound-packs': {
+      pack: 'cyberpunk'
+    }
+  },
   enableVibrancy: false,
   enableSounds: false,
   maxLogDays: 7,
@@ -67,5 +94,16 @@ export const defaultConfig: AppConfig = {
       { id: '2', name: 'Работа / YouTube', gameFilter: 'disabled', ipsetMode: 'loaded' },
       { id: '3', name: 'Максимальный обход', gameFilter: 'disabled', ipsetMode: 'none' }
     ]
+  },
+  accelerator: {
+    enabled: false,
+    autoStart: false,
+    tunMode: false,
+    autoUpdateSub: false,
+    subscriptionUrl: '',
+    proxies: [],
+    selectedProxy: '',
+    routeMode: 'bypass',
+    selectedProcesses: ['discord.exe', 'steam.exe']
   }
 }

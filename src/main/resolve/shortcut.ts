@@ -1,4 +1,4 @@
-﻿import { globalShortcut } from 'electron'
+import { globalShortcut } from 'electron'
 import { getAppConfig } from '../config'
 import { triggerMainWindow } from '..'
 import { startTgws, stopTgws, getTgwsStatus } from '../core/tgws'

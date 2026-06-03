@@ -1,0 +1,8 @@
+{
+  "id": "nexus-accelerator",
+  "name": "Nexus Accelerator",
+  "version": "1.0.0",
+  "description": "Разблокирует вкладку \"Ускоритель\" для VPN-подписок",
+  "author": "whymeow",
+  "entry": "index.js"
+}

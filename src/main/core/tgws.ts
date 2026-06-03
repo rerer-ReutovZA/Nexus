@@ -6,6 +6,7 @@ import os from 'os'
 import { BrowserWindow } from 'electron'
 import { tgwsBinaryPath } from '../utils/dirs'
 import { getAppConfig, patchAppConfig } from '../config'
+import { pluginManager } from './plugin-manager'
 
 // ---- module state ----------------------------------------------------------
 
@@ -42,6 +43,7 @@ function log(type: ControllerLog['type'], payload: string): void {
 function setStatus(next: Partial<CoreStatus>): void {
   status = { ...status, ...next }
   broadcast('tgws:status', status)
+  pluginManager.emitEvent('tgws:status', status)
 }
 
 export function getTgwsStatus(): CoreStatus {

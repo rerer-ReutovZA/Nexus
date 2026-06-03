@@ -58,9 +58,28 @@ interface AppConfig {
   // ---- GPU / low-level
   disableGPU: boolean
 
+  // ---- Plugins
+  enabledPlugins?: string[]        // IDs of currently active plugins
+  pluginSettings?: Record<string, any> // Plugin-specific configuration data
+
   // ---- Feature-specific sub-configs
   tgws?: TgwsConfig
   zapret?: ZapretConfig
+  accelerator?: AcceleratorConfig
+}
+
+interface AcceleratorConfig {
+  enabled: boolean
+  autoStart?: boolean
+  tunMode?: boolean
+  autoUpdateSub?: boolean // NEW: Background sync
+  subscriptionUrl?: string
+  proxies?: any[] // Loaded from subscription
+  selectedProxy?: string // ID
+  routeMode: 'all' | 'bypass' | 'selective'
+  selectedProcesses?: string[] // For split tunneling
+  binaryPath?: string
+  installedVersion?: string
 }
 
 interface TgwsConfig {

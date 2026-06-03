@@ -1,4 +1,4 @@
-﻿import { readFile, writeFile, rename, copyFile, unlink } from 'fs/promises'
+import { readFile, writeFile, rename, copyFile, unlink } from 'fs/promises'
 import { appConfigPath } from '../utils/dirs'
 import { parseYaml, stringifyYaml } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
@@ -6,9 +6,16 @@ import { defaultConfig, CONFIG_VERSION } from '../utils/template'
 import { randomBytes } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
 import { enableAutoRun, disableAutoRun } from '../sys/autoRun'
+import { BrowserWindow } from 'electron'
 
 let appConfig: AppConfig | undefined
 let writePromise: Promise<void> = Promise.resolve()
+
+function broadcast(channel: string, ...args: unknown[]): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, ...args)
+  }
+}
 
 function isValidConfig(c: unknown): c is AppConfig {
   return !!c && typeof c === 'object' && 'appTheme' in (c as object)
@@ -87,10 +94,8 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
       zapret: {
         ...(appConfig.zapret ?? defaultConfig.zapret!),
         enabled: false,
-        autoStart: false,
-        // Force the user to consciously pick a strategy in the UI rather
-        // than silently inheriting whatever was last used in dev.
-        activeStrategy: undefined
+        autoStart: false
+        // Removed forced reset of activeStrategy to ensure persistence
       }
     }
     try {
@@ -180,6 +185,7 @@ export async function patchAppConfig(patch: Partial<AppConfig>): Promise<void> {
       applySkipTaskbar()
     } catch { /* noop */ }
   }
+  broadcast('appConfigUpdated')
 }
 
 export function getAppConfigSync(): AppConfig {

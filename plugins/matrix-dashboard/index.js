@@ -1,0 +1,1 @@
+export function init(context) { context.log('Matrix Dashboard Active'); return { onShutdown: () => {} }; }

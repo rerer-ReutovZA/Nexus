@@ -1,0 +1,8 @@
+{
+  "id": "ad-blocker",
+  "name": "Ad-Blocker",
+  "version": "1.0.0",
+  "description": "Блокировка рекламы через системный hosts",
+  "author": "whymeow",
+  "entry": "index.js"
+}

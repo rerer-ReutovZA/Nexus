@@ -1,0 +1,8 @@
+{
+  "id": "telegram-bot",
+  "name": "Telegram Bot",
+  "version": "1.0.0",
+  "description": "Дистанционное управление через Telegram",
+  "author": "whymeow",
+  "entry": "index.js"
+}

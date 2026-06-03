@@ -89,6 +89,7 @@ export default {
     rules: 'Rules',
     connection: 'Connections',
     logs: 'Logs',
+    plugins: 'Plugins',
     domainSniffing: 'Domain Sniffing',
     coreSettings: 'Core Settings',
     systemProxy: 'System Proxy',

@@ -1,4 +1,4 @@
-﻿import { app, Menu } from 'electron'
+import { app, Menu } from 'electron'
 import { showMainWindow } from '..'
 
 export async function createApplicationMenu(): Promise<void> {

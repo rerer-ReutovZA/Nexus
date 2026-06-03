@@ -5,6 +5,7 @@ import AdmZip from 'adm-zip'
 import { BrowserWindow } from 'electron'
 import { zapretBundleDir, zapretRuntimeDir } from '../utils/dirs'
 import { getAppConfig } from '../config'
+import { pluginManager } from './plugin-manager'
 
 export interface StrategyDescriptor {
   file: string
@@ -33,6 +34,7 @@ function log(type: ControllerLog['type'], payload: string): void {
 function setStatus(next: Partial<CoreStatus>): void {
   status = { ...status, ...next }
   broadcast('zapret:status', status)
+  pluginManager.emitEvent('zapret:status', status)
 }
 
 export function getZapretStatus(): CoreStatus {

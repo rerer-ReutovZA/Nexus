@@ -1,4 +1,4 @@
-﻿import { app, Menu, nativeImage, Tray } from 'electron'
+import { app, Menu, nativeImage, Tray } from 'electron'
 import { resolve, join } from 'path'
 import { existsSync } from 'fs'
 import { mainWindow, triggerMainWindow, showMainWindow } from '..'

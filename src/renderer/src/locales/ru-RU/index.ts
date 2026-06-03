@@ -90,6 +90,7 @@ export default {
     rules: 'Правила',
     connection: 'Подключения',
     logs: 'Логи',
+    plugins: 'Плагины',
     domainSniffing: 'Определение доменов',
     coreSettings: 'Настройки ядра',
     systemProxy: 'Системный прокси',

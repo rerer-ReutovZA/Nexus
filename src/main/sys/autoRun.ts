@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import { exePath } from '../utils/dirs'
+import { appLog } from '../utils/app-logger'
 
 const TASK_NAME = 'NexusAutoStart'
 
@@ -80,38 +81,41 @@ function buildTaskXml(exe: string): string {
 }
 
 export async function enableAutoRun(): Promise<void> {
-  if (is.dev) return
   // Migrate away from any legacy HKCU\Run entry.
   clearLegacyRunEntry()
   const exe = exePath()
   const xml = buildTaskXml(exe)
+  appLog('info', `[autoRun] enabling auto-launch (dev: ${is.dev})`)
+  
   // schtasks reads the XML from a file path passed via /XML.
   const { writeFile, unlink } = await import('node:fs/promises')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
   const xmlPath = join(tmpdir(), `nexus-task-${Date.now()}.xml`)
+  
   // Task Scheduler expects UTF-16 LE with BOM for the XML file.
   const buf = Buffer.from('\ufeff' + xml, 'utf16le')
   await writeFile(xmlPath, buf)
   try {
     const r = await runSchtasks(['/Create', '/F', '/TN', TASK_NAME, '/XML', xmlPath])
     if (r.code !== 0) {
+      appLog('error', `[autoRun] schtasks failed: ${r.out}`)
       throw new Error(`schtasks /Create failed (code=${r.code}): ${r.out.trim()}`)
     }
+    appLog('info', `[autoRun] task created successfully`)
   } finally {
     try { await unlink(xmlPath) } catch { /* noop */ }
   }
 }
 
 export async function disableAutoRun(): Promise<void> {
-  if (is.dev) return
   clearLegacyRunEntry()
-  // /F forces silent removal even if task is missing or running.
-  await runSchtasks(['/Delete', '/F', '/TN', TASK_NAME])
+  appLog('info', `[autoRun] disabling auto-launch`)
+  const r = await runSchtasks(['/Delete', '/F', '/TN', TASK_NAME])
+  if (r.code === 0) appLog('info', `[autoRun] task deleted`)
 }
 
 export async function isAutoRun(): Promise<boolean> {
-  if (is.dev) return false
   const r = await runSchtasks(['/Query', '/TN', TASK_NAME])
   return r.code === 0
 }

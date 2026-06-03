@@ -1,4 +1,4 @@
-﻿import { electronApp, is, optimizer } from '@electron-toolkit/utils'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
 import windowStateKeeper from 'electron-window-state'
 import { join } from 'path'
@@ -15,6 +15,7 @@ import { updateCommunityList } from './core/zapret-iplist'
 import { appLog } from './utils/app-logger'
 import { enableAutoRun, disableAutoRun } from './sys/autoRun'
 import { isRunningAsAdmin } from './utils/elevation'
+import { pluginManager } from './core/plugin-manager'
 
 // Lock the userData / cache / log folder names.
 app.setName(is.dev ? 'nexus-dev' : 'nexus')
@@ -53,14 +54,14 @@ const initPromise = init()
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.nexus.app')
-  appLog('info', `Nexus запущен (v${app.getVersion()}, ${process.platform}-${process.arch})`)
+  appLog('info', `Nexus started (v${app.getVersion()}, ${process.platform}-${process.arch})`)
+  appLog('info', `userData path: ${app.getPath('userData')}`)
 
   if (process.platform === 'win32' && !is.dev && !(await isRunningAsAdmin())) {
     dialog.showErrorBox(
-      'Nexus — нужны права администратора',
-      'Nexus должен быть запущен с правами администратора, иначе Zapret\n' +
-        '(WinDivert) и автозапуск через Task Scheduler не будут работать.\n\n' +
-        'Закройте приложение и запустите его через «Запустить от имени администратора».'
+      'Nexus — Administrator rights required',
+      'Nexus must be run as administrator for Zapret (WinDivert) and auto-launch to work.\n\n' +
+        'Please restart Nexus with "Run as administrator".'
     )
     app.quit()
     return
@@ -68,9 +69,9 @@ app.whenReady().then(async () => {
 
   try {
     await initPromise
-    appLog('info', 'Инициализация завершена')
+    appLog('info', 'Initialization completed')
   } catch (e) {
-    appLog('error', `Ошибка инициализации: ${e}`)
+    appLog('error', `Initialization failed: ${e}`)
     dialog.showErrorBox('Nexus init failed', `${e}`)
     app.quit()
     return
@@ -83,33 +84,75 @@ app.whenReady().then(async () => {
   registerIpcMainHandlers()
   const appConfig = await getAppConfig()
 
+  await pluginManager.init()
+
   if (appConfig.tgws?.autoStart) {
-    appLog('info', 'Автозапуск Telegram WS — старт')
+    appLog('info', 'Autostart Telegram WS — start')
     startTgws().catch((e) => {
-      appLog('error', `Автозапуск Telegram WS упал: ${e}`)
+      appLog('error', `Autostart Telegram WS failed: ${e}`)
       showError('TG WS start failed', `${e}`)
     })
   }
   if (appConfig.zapret?.autoStart) {
-    appLog('info', 'Автозапуск Zapret — старт')
+    appLog('info', 'Autostart Zapret — start')
     startZapret().catch((e) => {
-      appLog('error', `Автозапуск Zapret упал: ${e}`)
+      appLog('error', `Autostart Zapret failed: ${e}`)
       showError('Zapret start failed', `${e}`)
     })
   }
 
   if (appConfig.zapret?.autoUpdateList && appConfig.zapret?.listUpdateUrl) {
-    appLog('info', 'Запуск фонового обновления списков IP')
+    appLog('info', 'Starting background IP list updates')
     // 12 hours interval for updates
     setInterval(() => {
       updateCommunityList(appConfig.zapret!.listUpdateUrl!)
-        .then(() => appLog('info', 'Список IP успешно обновлен в фоне'))
-        .catch((e) => appLog('error', `Ошибка обновления списка IP: ${e}`))
+        .then(() => appLog('info', 'IP list successfully updated in background'))
+        .catch((e) => appLog('error', `IP list update error: ${e}`))
     }, 12 * 60 * 60 * 1000)
     // Also trigger one immediately on startup, without blocking
     updateCommunityList(appConfig.zapret.listUpdateUrl)
-        .then(() => appLog('info', 'Список IP (startup) успешно обновлен'))
-        .catch((e) => appLog('error', `Ошибка обновления списка IP (startup): ${e}`))
+        .then(() => appLog('info', 'IP list (startup) successfully updated'))
+        .catch((e) => appLog('error', `IP list (startup) update error: ${e}`))
+  }
+
+  // ---- Accelerator Background Sync ----
+  if (appConfig.accelerator?.autoUpdateSub && appConfig.accelerator?.subscriptionUrl) {
+    appLog('info', 'Starting background subscription updates')
+    setInterval(async () => {
+      try {
+        const config = await getAppConfig()
+        if (!config.accelerator?.autoUpdateSub || !config.accelerator?.subscriptionUrl) return
+        
+        appLog('info', `Syncing subscription: ${config.accelerator.subscriptionUrl}`)
+        const res = await fetch(config.accelerator.subscriptionUrl)
+        if (!res.ok) return
+        let text = await res.text()
+        if (!text.includes('://')) {
+          try { text = Buffer.from(text, 'base64').toString('utf8') } catch { /* ignore */ }
+        }
+        const lines = text.split(/\r?\n/).filter(l => l.trim())
+        const proxies = lines.map((line, i) => {
+          try {
+            const urlObj = new URL(line)
+            return {
+              id: Math.random().toString(36).slice(2),
+              name: decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i+1}`,
+              type: urlObj.protocol.replace(':', '').toUpperCase(),
+              address: urlObj.hostname,
+              port: parseInt(urlObj.port),
+              uuid: urlObj.username,
+              sni: urlObj.searchParams.get('sni') || '',
+              full: line
+            }
+          } catch { return null }
+        }).filter(Boolean)
+
+        if (proxies.length > 0) {
+          await patchAppConfig({ accelerator: { ...config.accelerator, proxies } })
+          appLog('info', `Subscription synced (${proxies.length} proxies)`)
+        }
+      } catch (e) { appLog('error', `Sub sync error: ${e}`) }
+    }, 60 * 60 * 1000) // 1 hour
   }
 
   // Synchronise Windows auto-launch with the saved config — keeps the toggle
@@ -143,27 +186,6 @@ let isQuitting = false
  * Synchronous, fire-and-forget cleanup that runs when the app quits. Kills
  * every child process Nexus ever spawned and unloads the WinDivert kernel
  * driver from memory so its `.sys` file is no longer locked on disk.
- *
- * IMPORTANT: we deliberately do NOT `sc delete` the WinDivert service. After
- * a reboot the LogonTrigger task fires Nexus during winlogon (before most
- * system services finish initialising); at that moment the SCM is busy and
- * `CreateService` from a freshly-spawned winws.exe races against it. The
- * race manifests as `WinDivertOpen()` failing silently — winws.exe stays
- * alive in the process list (so the UI shows "running") but no packets are
- * intercepted, so Discord/YouTube/etc. don't work even though Nexus
- * claims everything is fine. Keeping the service registered across quits
- * means winws.exe only has to call `StartService` on next boot, which is
- * synchronous and immune to the SCM race.
- *
- * `sc stop` alone is enough to make the install folder deletable: stopping
- * the service unloads the driver, releasing the kernel handle on the .sys
- * file. The leftover registry entry is just a few bytes pointing at the .sys
- * path; if the user moves Nexus to a new folder, `verifyWinDivertService`
- * (called on every Zapret start) detects the path mismatch and forces
- * re-registration.
- *
- * Belt-and-braces: safe to call repeatedly, every step swallows its own
- * errors (services that aren't loaded, processes that no longer exist, etc.).
  */
 function syncKillChildren(): void {
   if (process.platform !== 'win32') return
@@ -202,7 +224,7 @@ app.on('before-quit', async (e) => {
   // intercept the close to hide-to-tray.
   isQuitting = true
   if (cleanupRan) return
-  appLog('info', 'Выход из приложения, остановка всех сервисов…')
+  appLog('info', 'Exiting application, stopping all services...')
   // Hold the quit until child processes are actually dead, so Telegram
   // immediately loses its proxy.
   e.preventDefault()
@@ -291,11 +313,11 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
     if (trayOn && isTrayActive()) {
       e.preventDefault()
       if (hideTaskbarOn) {
-        appLog('info', 'Окно скрыто в трей (таскбар отключён)')
+        appLog('info', 'Window hidden to tray (таскбар отключён)')
         mainWindow?.setSkipTaskbar(true)
         mainWindow?.hide()
       } else {
-        appLog('info', 'Окно свёрнуто (доступно в панели задач и в трее)')
+        appLog('info', 'Window minimized (доступно в панели задач и в трее)')
         mainWindow?.setSkipTaskbar(false)
         mainWindow?.minimize()
       }
