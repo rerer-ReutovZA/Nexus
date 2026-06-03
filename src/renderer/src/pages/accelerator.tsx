@@ -69,27 +69,33 @@ const AcceleratorPage: React.FC = () => {
   }
 
   const handleToggle = async (enabled: boolean) => {
-    // If turning ON, check requirements
-    if (enabled) {
-      if (!config.selectedProxy && (config.proxies || []).length > 0) {
-        // Auto-select first if none selected
-        update({ selectedProxy: config.proxies![0].id })
-        toast.info('Автоматически выбран первый сервер')
-      } else if (!config.selectedProxy) {
-        toast.error('Добавьте подписку и выберите сервер')
-        return
-      }
-    }
-
     setLoading(true)
     try {
       if (!enabled) {
         await window.electron.ipcRenderer.invoke('singbox:stop')
         toast.success('Ускоритель остановлен')
       } else {
+        // Ensure a proxy is selected
+        if (!config.selectedProxy) {
+          if ((config.proxies || []).length > 0) {
+            const firstId = config.proxies![0].id
+            // We MUST wait for the config to be patched before starting the engine
+            await window.electron.ipcRenderer.invoke('app:patchConfig', { 
+              accelerator: { ...config, selectedProxy: firstId } 
+            })
+            toast.info('Автоматически выбран первый сервер')
+          } else {
+            toast.error('Сначала добавьте подписку и выберите сервер')
+            setLoading(false)
+            return
+          }
+        }
+        
         const res = await window.electron.ipcRenderer.invoke('singbox:start')
         if (res.ok) toast.success('Ускоритель запущен')
-        else toast.error('Ошибка запуска', { description: res.message })
+        else {
+           toast.error('Ошибка запуска', { description: res.message })
+        }
       }
     } catch (e) {
       toast.error('Системная ошибка', { description: String(e) })
@@ -128,11 +134,14 @@ const AcceleratorPage: React.FC = () => {
     try {
       const res = await window.electron.ipcRenderer.invoke('sub:fetch', config.subscriptionUrl)
       if (res.ok) {
-        update({ proxies: res.value })
+        // Direct call to patch to be sure it's done
+        await window.electron.ipcRenderer.invoke('app:patchConfig', { 
+          accelerator: { ...config, proxies: res.value } 
+        })
         toast.success('Подписка обновлена')
         triggerAllPings(res.value)
       } else {
-        toast.error('Сбой загрузки')
+        toast.error('Сбой загрузки подписки', { description: res.message })
       }
     } catch (e) {
       toast.error('Сбой загрузки')

@@ -304,7 +304,6 @@ export function registerIpcMainHandlers(): void {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     let text = await res.text()
     
-    // Try to decode Base64 if needed
     if (!text.includes('://')) {
       try { text = Buffer.from(text, 'base64').toString('utf8') } catch { /* ignore */ }
     }
@@ -314,6 +313,8 @@ export function registerIpcMainHandlers(): void {
       try {
         const urlObj = new URL(line)
         const name = decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i+1}`
+        const params = urlObj.searchParams
+
         return {
           id: Math.random().toString(36).slice(2),
           name,
@@ -321,7 +322,11 @@ export function registerIpcMainHandlers(): void {
           address: urlObj.hostname,
           port: parseInt(urlObj.port),
           uuid: urlObj.username,
-          sni: urlObj.searchParams.get('sni') || '',
+          sni: params.get('sni') || '',
+          pbk: params.get('pbk') || '',     // Reality Public Key
+          sid: params.get('sid') || '',     // Reality Short ID
+          flow: params.get('flow') || '',   // VLESS XTLS flow
+          fp: params.get('fp') || 'chrome', // Fingerprint
           full: line
         }
       } catch { return null }

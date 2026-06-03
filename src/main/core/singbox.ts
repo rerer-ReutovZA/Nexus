@@ -37,11 +37,9 @@ export function getSingboxStatus(): CoreStatus {
 
 async function fetchTraffic(): Promise<void> {
   try {
-    // We use the experimental REST API of sing-box
     const res = await fetch('http://127.0.0.1:9090/traffic')
     if (!res.ok) return
-    const data = await res.json() // { up: bytes/s, down: bytes/s }
-    
+    const data = await res.json()
     const current = status.traffic || { up: 0, down: 0, totalUp: 0, totalDown: 0 }
     setStatus({
       traffic: {
@@ -73,6 +71,9 @@ export async function startSingbox(): Promise<void> {
     const configPath = path.join(dataDir(), 'accelerator-config.json')
     const selectedProxy = (s.proxies || []).find(p => p.id === s.selectedProxy)
 
+    const hasProxy = !!selectedProxy
+    const activeOutbound = hasProxy ? 'proxy' : 'direct'
+
     const inbounds: any[] = [
       {
         type: 'mixed',
@@ -102,10 +103,14 @@ export async function startSingbox(): Promise<void> {
       { type: 'dns-out', tag: 'dns-out' }
     ]
 
-    if (selectedProxy) {
-      log('info', `Использование сервера: ${selectedProxy.name}`)
-      outbounds.push({
-        type: 'vless',
+    if (hasProxy) {
+      log('info', `Использование сервера: ${selectedProxy.name} (${selectedProxy.type})`)
+      
+      // Map protocol correctly. REALITY/VLESS -> vless
+      const protocol = selectedProxy.type.toLowerCase() === 'reality' ? 'vless' : selectedProxy.type.toLowerCase()
+
+      const outbound: any = {
+        type: protocol,
         tag: 'proxy',
         server: selectedProxy.address,
         server_port: selectedProxy.port,
@@ -113,9 +118,23 @@ export async function startSingbox(): Promise<void> {
         tls: {
           enabled: true,
           server_name: selectedProxy.sni || selectedProxy.address,
-          utls: { enabled: true, fingerprint: 'chrome' }
+          utls: { enabled: true, fingerprint: selectedProxy.fp || 'chrome' }
         }
-      })
+      }
+
+      if (selectedProxy.pbk) {
+        outbound.tls.reality = {
+          enabled: true,
+          public_key: selectedProxy.pbk,
+          short_id: selectedProxy.sid || ''
+        }
+      }
+
+      if (selectedProxy.flow) {
+        outbound.flow = selectedProxy.flow
+      }
+
+      outbounds.push(outbound)
     }
 
     const routeRules: any[] = [
@@ -123,17 +142,16 @@ export async function startSingbox(): Promise<void> {
     ]
 
     if (s.routeMode === 'selective' && s.selectedProcesses?.length) {
-      routeRules.push({ process_name: s.selectedProcesses, outbound: 'proxy' })
+      routeRules.push({ process_name: s.selectedProcesses, outbound: activeOutbound })
       routeRules.push({ outbound: 'direct' })
     } else if (s.routeMode === 'all') {
-      routeRules.push({ outbound: 'proxy' })
+      routeRules.push({ outbound: activeOutbound })
     } else {
       routeRules.push({ outbound: 'direct' })
     }
 
     const fullConfig = {
       log: { level: 'info' },
-      // ENABLE EXPERIMENTAL API FOR TRAFFIC STATS
       experimental: {
         clash_api: {
           external_controller: '127.0.0.1:9090'
@@ -146,7 +164,7 @@ export async function startSingbox(): Promise<void> {
         ],
         rules: [
           { outbound: 'direct', server: 'local' },
-          { outbound: 'proxy', server: 'remote' }
+          { outbound: hasProxy ? 'proxy' : 'direct', server: 'remote' }
         ],
         final: 'remote'
       },
@@ -179,13 +197,14 @@ export async function startSingbox(): Promise<void> {
        if (msg.includes('FATAL') || msg.includes('error')) {
           log('error', msg)
           setStatus({ state: 'error', lastError: msg })
+       } else {
+          log('warn', msg)
        }
     })
 
     setStatus({ state: 'running', pid: child.pid, startedAt: Date.now() })
     log('info', s.tunMode ? 'System VPN (TUN) is now ACTIVE' : 'Accelerator (Proxy) is now ACTIVE')
     
-    // Start traffic monitoring
     trafficInterval = setInterval(fetchTraffic, 1000)
 
   } catch (e) {
