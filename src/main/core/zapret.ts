@@ -136,12 +136,24 @@ export async function installZapretBundle(
     if (rootPrefix && !name.startsWith(rootPrefix)) continue
     const rel = name.slice(rootPrefix.length)
     if (!rel) continue
-    // Defensive: refuse path-traversal entries.
     if (rel.includes('..')) continue
     const out = path.join(dest, rel)
     mkdirSync(path.dirname(out), { recursive: true })
     writeFileSync(out, e.getData())
     written++
+  }
+
+  // FORCE COPY default lists to AppData so new domains apply instantly
+  const builtinListsDir = path.join(resourcesDir(), 'zapret', 'lists')
+  const runtimeListsDir = path.join(dest, 'lists')
+  if (existsSync(builtinListsDir)) {
+    if (!existsSync(runtimeListsDir)) mkdirSync(runtimeListsDir, { recursive: true })
+    const lists = readdirSync(builtinListsDir)
+    for (const file of lists) {
+      if (file.endsWith('.txt')) {
+        copyFileSync(path.join(builtinListsDir, file), path.join(runtimeListsDir, file))
+      }
+    }
   }
 
   const startWrapperRe = /start\s+"zapret:\s*%~n0"\s+\/min\s+/gi
