@@ -420,11 +420,26 @@ class MasterController {
     const channel = this.client.channels.cache.get(channelId)
     if (!channel || !channel.isTextBased()) return
 
-    const utf8Command = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`
+    // Suppress progress bars ($ProgressPreference) and force UTF8 encoding
+    const utf8Command = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; ${command}`
     const base64Command = Buffer.from(utf8Command, 'utf16le').toString('base64')
-    exec(`powershell -NoProfile -EncodedCommand ${base64Command}`, (err, stdout, stderr) => {
-      const output = stdout || stderr || (err ? err.message : 'Выполнено')
-      channel.send(`💻 **Shell [${this.hostname}]:**\n\`\`\`text\n${output.slice(0, 1900)}\n\`\`\``)
+    
+    exec(`powershell -NoProfile -EncodedCommand ${base64Command}`, async (err, stdout, stderr) => {
+      let output = stdout || stderr || (err ? err.message : 'Команда выполнена')
+      
+      // Remove CLIXML prefix if any remaining
+      output = output.replace(/#<\s*CLIXML[\s\S]+/, '').trim()
+
+      if (output.length <= 1900) {
+        await channel.send(`💻 **Shell [${this.hostname}]:**\n\`\`\`text\n${output}\n\`\`\``)
+      } else {
+        await channel.send(`💻 **Shell [${this.hostname}]:** (Output too long, splitting...)`)
+        // Split by 1900 chars
+        for (let i = 0; i < output.length; i += 1900) {
+          const chunk = output.slice(i, i + 1900)
+          await channel.send(`\`\`\`text\n${chunk}\n\`\`\``)
+        }
+      }
     })
   }
 

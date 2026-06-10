@@ -1,9 +1,9 @@
 import { spawn, spawnSync, ChildProcess } from 'child_process'
-import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, writeFileSync, renameSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, writeFileSync, renameSync, copyFileSync } from 'fs'
 import path from 'path'
 import AdmZip from 'adm-zip'
 import { BrowserWindow } from 'electron'
-import { zapretBundleDir, zapretRuntimeDir } from '../utils/dirs'
+import { zapretBundleDir, zapretRuntimeDir, resourcesDir } from '../utils/dirs'
 import { getAppConfig } from '../config'
 import { pluginManager } from './plugin-manager'
 
@@ -83,14 +83,17 @@ export async function installZapretBundle(
     try { await stopZapret() } catch { /* best-effort */ }
   }
 
+  // FORCE KILL any orphan winws.exe to release DLL locks (cygwin1.dll etc)
   if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/F', '/IM', 'winws.exe', '/T'], { windowsHide: true })
+    
     for (const name of WINDIVERT_SERVICE_NAMES) {
       try { spawnSync('sc.exe', ['stop', name], { windowsHide: true, timeout: 3000 }) } catch { /* noop */ }
       try { spawnSync('sc.exe', ['delete', name], { windowsHide: true, timeout: 3000 }) } catch { /* noop */ }
     }
     detectedWinDivertSvc = null
-    // Give the SCM a beat to actually release the .sys file handle.
-    await new Promise((r) => setTimeout(r, 400))
+    // Give Windows a moment to actually close file handles
+    await new Promise((r) => setTimeout(r, 1000))
   }
 
   let zip: AdmZip
