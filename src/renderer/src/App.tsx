@@ -21,13 +21,21 @@ import mapLight from '@renderer/assets/map_lighttheme.svg'
 
 const App: React.FC = () => {
   const { appConfig } = useAppConfig()
-  const { appTheme = 'dark', customTheme } = appConfig || {}
+  const {
+    appTheme = 'dark',
+    customTheme,
+    enableVibrancy = false,
+    backgroundImageOpacity = 65,
+    backgroundBlur = 48
+  } = appConfig || {}
   const { setTheme, resolvedTheme } = useTheme()
   const page = useRoutes(routes)
   const location = useLocation()
   const isHome = location.pathname === '/' || location.pathname.includes('/home')
   const mapBg = resolvedTheme === 'dark' ? mapDark : mapLight
-  
+  const mapOpacity = Math.min(100, Math.max(0, backgroundImageOpacity)) / 100
+  const mapBlur = Math.min(96, Math.max(0, backgroundBlur))
+
   useSounds()
 
   useEffect(() => {
@@ -92,9 +100,10 @@ const App: React.FC = () => {
     }
   }, [])
 
-  const customThemeObj = appConfig?.customThemes?.find(t => t.id === appTheme)
+  const customThemeObj = appConfig?.customThemes?.find((t) => t.id === appTheme)
 
-  const dynamicCustomCss = customThemeObj ? `
+  const dynamicCustomCss = customThemeObj
+    ? `
     .${customThemeObj.id} {
       --background: ${customThemeObj.bgColor};
       --card: ${customThemeObj.cardColor};
@@ -119,7 +128,8 @@ const App: React.FC = () => {
       --sidebar-foreground: ${customThemeObj.textColor};
       --sidebar-border: color-mix(in srgb, ${customThemeObj.bgColor} 80%, ${customThemeObj.textColor});
     }
-  ` : ''
+  `
+    : ''
 
   return (
     // Dark = pure black (was #080F16, deep navy). Light = neutral light
@@ -127,20 +137,22 @@ const App: React.FC = () => {
     // blue tint and stays consistent with the new monochrome palette.
     <SidebarProvider
       defaultOpen={false}
-      className="relative w-full h-screen overflow-hidden bg-background"
+      className={`relative w-full h-screen overflow-hidden bg-background ${
+        enableVibrancy ? 'nexus-glass' : ''
+      }`}
     >
       {appTheme === 'custom' && appConfig?.customThemeCss && (
         <style dangerouslySetInnerHTML={{ __html: appConfig.customThemeCss }} />
       )}
-      {customThemeObj && (
-        <style dangerouslySetInnerHTML={{ __html: dynamicCustomCss }} />
-      )}
+      {customThemeObj && <style dangerouslySetInnerHTML={{ __html: dynamicCustomCss }} />}
       <img
         src={mapBg}
         alt=""
-        className={`pointer-events-none absolute inset-0 opacity-65 w-full h-full object-cover z-0 transition-[filter] duration-500 ${
-          isHome ? '' : 'blur-3xl'
-        }`}
+        className="pointer-events-none absolute inset-0 w-full h-full object-cover z-0 transition-[filter,opacity] duration-500"
+        style={{
+          opacity: mapOpacity,
+          filter: isHome || mapBlur === 0 ? undefined : `blur(${mapBlur}px)`
+        }}
       />
       {platform === 'darwin' && (
         <div className="fixed top-0.5 -left-1 h-14.25 flex items-center pl-3 z-100 app-drag">

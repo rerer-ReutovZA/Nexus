@@ -26,6 +26,9 @@ interface AppConfig {
   customThemeCss?: string // Legacy CSS payload (deprecated but kept for migration)
   customThemes?: CustomTheme[] // User-created visual themes
   enableVibrancy?: boolean // Windows 11 Mica/Acrylic
+  glassEffect?: 'mica' | 'acrylic' | 'tabbed'
+  backgroundImageOpacity?: number // 0..100
+  backgroundBlur?: number // 0..96 pixels
   enableSounds?: boolean // Cyberpunk sound effects
   disableTray?: boolean
   hideTaskbarIcon?: boolean

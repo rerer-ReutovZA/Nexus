@@ -38,7 +38,11 @@ async function safeWriteConfig(content: string): Promise<void> {
     }
   } catch (e) {
     if (existsSync(tmpPath)) {
-      try { await unlink(tmpPath) } catch { /* noop */ }
+      try {
+        await unlink(tmpPath)
+      } catch {
+        /* noop */
+      }
     }
     throw e
   }
@@ -61,13 +65,10 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
   }
   if (!appConfig || typeof appConfig !== 'object') appConfig = defaultConfig
 
-  const persistedVersion: number = typeof appConfig.configVersion === 'number'
-    ? appConfig.configVersion
-    : 0
+  const persistedVersion: number =
+    typeof appConfig.configVersion === 'number' ? appConfig.configVersion : 0
 
-  const persistedBuildId = typeof appConfig.lastBuildId === 'string'
-    ? appConfig.lastBuildId
-    : ''
+  const persistedBuildId = typeof appConfig.lastBuildId === 'string' ? appConfig.lastBuildId : ''
 
   // Backfill any missing fields (e.g. tgws/zapret sections from older configs)
   // by merging persisted values *over* the default template.
@@ -81,8 +82,8 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
       // Behaviour toggles — forced back to template defaults.
       autoLaunch: false,
       silentStart: false,
-      disableTray: false,         // tray ON
-      hideTaskbarIcon: false,     // normal taskbar behaviour
+      disableTray: false, // tray ON
+      hideTaskbarIcon: false, // normal taskbar behaviour
       tgws: {
         ...(appConfig.tgws ?? defaultConfig.tgws!),
         enabled: false,
@@ -100,11 +101,17 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
     }
     try {
       await safeWriteConfig(stringifyYaml(appConfig))
-    } catch { /* noop — best-effort, will retry on next patch */ }
+    } catch {
+      /* noop — best-effort, will retry on next patch */
+    }
     // Tear down any auto-launch task / registry entry left over from a
     // prior install so the freshly-reset `autoLaunch: false` actually
     // takes effect on the next login.
-    try { await disableAutoRun() } catch { /* noop */ }
+    try {
+      await disableAutoRun()
+    } catch {
+      /* noop */
+    }
   }
 
   // ---- One-shot migration
@@ -115,9 +122,9 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
       // Wipe every "behaviour" toggle so production builds always start
       // identically regardless of what dev runs left behind.
       autoLaunch: false,
-      silentStart: false,         // ← critical: stale `true` left the window invisible on launch
-      disableTray: false,         // tray icon ON by default — required for hideTaskbarIcon
-      hideTaskbarIcon: false,     // normal taskbar behaviour by default
+      silentStart: false, // ← critical: stale `true` left the window invisible on launch
+      disableTray: false, // tray icon ON by default — required for hideTaskbarIcon
+      hideTaskbarIcon: false, // normal taskbar behaviour by default
       tgws: {
         ...(appConfig.tgws ?? defaultConfig.tgws!),
         enabled: false,
@@ -139,11 +146,17 @@ export async function getAppConfig(force = false): Promise<AppConfig> {
     // patchAppConfig call doesn't roll back the migration.
     try {
       await safeWriteConfig(stringifyYaml(appConfig))
-    } catch { /* noop — migration is best-effort */ }
+    } catch {
+      /* noop — migration is best-effort */
+    }
     // Also tear down any auto-launch task/registry left over from a prior
     // build so Nexus isn't relaunched on next login against the user's
     // (now-clean) preference.
-    try { await disableAutoRun() } catch { /* noop */ }
+    try {
+      await disableAutoRun()
+    } catch {
+      /* noop */
+    }
   }
 
   return appConfig
@@ -164,7 +177,9 @@ export async function patchAppConfig(patch: Partial<AppConfig>): Promise<void> {
     try {
       if (patch.autoLaunch) await enableAutoRun()
       else await disableAutoRun()
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   }
   // React to tray toggle: create or destroy tray on the fly so the user
   // doesn't have to relaunch the app for the change to take effect.
@@ -173,7 +188,9 @@ export async function patchAppConfig(patch: Partial<AppConfig>): Promise<void> {
       const tray = await import('../resolve/tray')
       if (patch.disableTray) tray.destroyTray()
       else await tray.createTray()
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   }
   const disableTrayChanged =
     patch.disableTray !== undefined && patch.disableTray !== prevDisableTray
@@ -183,7 +200,17 @@ export async function patchAppConfig(patch: Partial<AppConfig>): Promise<void> {
     try {
       const { applySkipTaskbar } = await import('../resolve/windowVisibility')
       applySkipTaskbar()
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
+  }
+  if (patch.enableVibrancy !== undefined || patch.glassEffect !== undefined) {
+    try {
+      const { applyWindowAppearance } = await import('../resolve/window-appearance')
+      if (appConfig) applyWindowAppearance(appConfig)
+    } catch {
+      /* unsupported Windows version or no window yet */
+    }
   }
   broadcast('appConfigUpdated')
 }

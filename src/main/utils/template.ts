@@ -61,6 +61,9 @@ export const defaultConfig: AppConfig = {
     }
   },
   enableVibrancy: false,
+  glassEffect: 'mica',
+  backgroundImageOpacity: 65,
+  backgroundBlur: 48,
   enableSounds: false,
   maxLogDays: 7,
   disableGPU: false,

@@ -17,6 +17,7 @@ import { enableAutoRun, disableAutoRun } from './sys/autoRun'
 import { isRunningAsAdmin } from './utils/elevation'
 import { pluginManager } from './core/plugin-manager'
 import { masterController } from './core/master-controller'
+import { applyWindowAppearance, isGlassEnabled } from './resolve/window-appearance'
 
 // Lock the userData / cache / log folder names.
 app.setName(is.dev ? 'nexus-dev' : 'nexus')
@@ -42,7 +43,7 @@ process.on('uncaughtException', (err) => {
   appLog('error', `uncaughtException: ${err.stack || err.message}`)
 })
 process.on('unhandledRejection', (reason) => {
-  const msg = reason instanceof Error ? (reason.stack || reason.message) : String(reason)
+  const msg = reason instanceof Error ? reason.stack || reason.message : String(reason)
   appLog('error', `unhandledRejection: ${msg}`)
 })
 
@@ -106,55 +107,71 @@ app.whenReady().then(async () => {
   if (appConfig.zapret?.autoUpdateList && appConfig.zapret?.listUpdateUrl) {
     appLog('info', 'Starting background IP list updates')
     // 12 hours interval for updates
-    setInterval(() => {
-      updateCommunityList(appConfig.zapret!.listUpdateUrl!)
-        .then(() => appLog('info', 'IP list successfully updated in background'))
-        .catch((e) => appLog('error', `IP list update error: ${e}`))
-    }, 12 * 60 * 60 * 1000)
+    setInterval(
+      () => {
+        updateCommunityList(appConfig.zapret!.listUpdateUrl!)
+          .then(() => appLog('info', 'IP list successfully updated in background'))
+          .catch((e) => appLog('error', `IP list update error: ${e}`))
+      },
+      12 * 60 * 60 * 1000
+    )
     // Also trigger one immediately on startup, without blocking
     updateCommunityList(appConfig.zapret.listUpdateUrl)
-        .then(() => appLog('info', 'IP list (startup) successfully updated'))
-        .catch((e) => appLog('error', `IP list (startup) update error: ${e}`))
+      .then(() => appLog('info', 'IP list (startup) successfully updated'))
+      .catch((e) => appLog('error', `IP list (startup) update error: ${e}`))
   }
 
   // ---- Accelerator Background Sync ----
   if (appConfig.accelerator?.autoUpdateSub && appConfig.accelerator?.subscriptionUrl) {
     appLog('info', 'Starting background subscription updates')
-    setInterval(async () => {
-      try {
-        const config = await getAppConfig()
-        if (!config.accelerator?.autoUpdateSub || !config.accelerator?.subscriptionUrl) return
-        
-        appLog('info', `Syncing subscription: ${config.accelerator.subscriptionUrl}`)
-        const res = await fetch(config.accelerator.subscriptionUrl)
-        if (!res.ok) return
-        let text = await res.text()
-        if (!text.includes('://')) {
-          try { text = Buffer.from(text, 'base64').toString('utf8') } catch { /* ignore */ }
-        }
-        const lines = text.split(/\r?\n/).filter(l => l.trim())
-        const proxies = lines.map((line, i) => {
-          try {
-            const urlObj = new URL(line)
-            return {
-              id: Math.random().toString(36).slice(2),
-              name: decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i+1}`,
-              type: urlObj.protocol.replace(':', '').toUpperCase(),
-              address: urlObj.hostname,
-              port: parseInt(urlObj.port),
-              uuid: urlObj.username,
-              sni: urlObj.searchParams.get('sni') || '',
-              full: line
-            }
-          } catch { return null }
-        }).filter(Boolean)
+    setInterval(
+      async () => {
+        try {
+          const config = await getAppConfig()
+          if (!config.accelerator?.autoUpdateSub || !config.accelerator?.subscriptionUrl) return
 
-        if (proxies.length > 0) {
-          await patchAppConfig({ accelerator: { ...config.accelerator, proxies } })
-          appLog('info', `Subscription synced (${proxies.length} proxies)`)
+          appLog('info', `Syncing subscription: ${config.accelerator.subscriptionUrl}`)
+          const res = await fetch(config.accelerator.subscriptionUrl)
+          if (!res.ok) return
+          let text = await res.text()
+          if (!text.includes('://')) {
+            try {
+              text = Buffer.from(text, 'base64').toString('utf8')
+            } catch {
+              /* ignore */
+            }
+          }
+          const lines = text.split(/\r?\n/).filter((l) => l.trim())
+          const proxies = lines
+            .map((line, i) => {
+              try {
+                const urlObj = new URL(line)
+                return {
+                  id: Math.random().toString(36).slice(2),
+                  name: decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i + 1}`,
+                  type: urlObj.protocol.replace(':', '').toUpperCase(),
+                  address: urlObj.hostname,
+                  port: parseInt(urlObj.port),
+                  uuid: urlObj.username,
+                  sni: urlObj.searchParams.get('sni') || '',
+                  full: line
+                }
+              } catch {
+                return null
+              }
+            })
+            .filter(Boolean)
+
+          if (proxies.length > 0) {
+            await patchAppConfig({ accelerator: { ...config.accelerator, proxies } })
+            appLog('info', `Subscription synced (${proxies.length} proxies)`)
+          }
+        } catch (e) {
+          appLog('error', `Sub sync error: ${e}`)
         }
-      } catch (e) { appLog('error', `Sub sync error: ${e}`) }
-    }, 60 * 60 * 1000) // 1 hour
+      },
+      60 * 60 * 1000
+    ) // 1 hour
   }
 
   // Synchronise Windows auto-launch with the saved config — keeps the toggle
@@ -208,7 +225,9 @@ function syncKillChildren(): void {
     for (const svc of ['WinDivert', 'windivert', 'WinDivert64', 'windivert64']) {
       spawnSync('sc.exe', ['stop', svc], opts)
     }
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 async function cleanupServices(): Promise<void> {
@@ -238,8 +257,14 @@ app.on('before-quit', async (e) => {
 // closed, Task Manager, system shutdown), `before-quit` may not run. Issue
 // a blocking `taskkill /F /IM ... /T` so the proxy never outlives Nexus.
 process.on('exit', () => syncKillChildren())
-process.on('SIGINT', () => { syncKillChildren(); process.exit(0) })
-process.on('SIGTERM', () => { syncKillChildren(); process.exit(0) })
+process.on('SIGINT', () => {
+  syncKillChildren()
+  process.exit(0)
+})
+process.on('SIGTERM', () => {
+  syncKillChildren()
+  process.exit(0)
+})
 
 export async function createWindow(appConfig?: AppConfig): Promise<void> {
   const config = appConfig ?? (await getAppConfig())
@@ -262,7 +287,7 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
   // is never allowed — the recovery path would vanish.
   const initialSkipTaskbar = !!config.hideTaskbarIcon && !config.disableTray
 
-  const useVibrancy = !!config.enableVibrancy && process.platform === 'win32'
+  const useVibrancy = isGlassEnabled(config)
 
   mainWindow = new BrowserWindow({
     minWidth: 860,
@@ -290,10 +315,7 @@ export async function createWindow(appConfig?: AppConfig): Promise<void> {
     }
   })
 
-  if (useVibrancy) {
-    // 'mica', 'acrylic', 'tabbed' are supported on Win 11
-    mainWindow.setBackgroundMaterial('mica')
-  }
+  applyWindowAppearance(config, mainWindow)
 
   mainWindowState.manage(mainWindow)
 

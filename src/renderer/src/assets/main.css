@@ -114,7 +114,7 @@
   --foreground: oklch(0.95 0.02 240);
   --card: oklch(0.25 0.06 240);
   --card-foreground: oklch(0.95 0.02 240);
-  --popover: oklch(0.20 0.05 240);
+  --popover: oklch(0.2 0.05 240);
   --popover-foreground: oklch(0.95 0.02 240);
   --primary: oklch(0.7 0.15 240);
   --primary-foreground: oklch(0.15 0.05 240);
@@ -151,7 +151,7 @@
   --foreground: oklch(0.95 0.02 150);
   --card: oklch(0.25 0.05 150);
   --card-foreground: oklch(0.95 0.02 150);
-  --popover: oklch(0.20 0.04 150);
+  --popover: oklch(0.2 0.04 150);
   --popover-foreground: oklch(0.95 0.02 150);
   --primary: oklch(0.65 0.15 140);
   --primary-foreground: oklch(0.15 0.05 140);
@@ -188,7 +188,7 @@
   --foreground: oklch(0.95 0.02 300);
   --card: oklch(0.25 0.06 300);
   --card-foreground: oklch(0.95 0.02 300);
-  --popover: oklch(0.20 0.05 300);
+  --popover: oklch(0.2 0.05 300);
   --popover-foreground: oklch(0.95 0.02 300);
   --primary: oklch(0.65 0.18 300);
   --primary-foreground: oklch(0.15 0.05 300);
@@ -225,7 +225,7 @@
   --foreground: oklch(0.95 0.02 15);
   --card: oklch(0.25 0.06 15);
   --card-foreground: oklch(0.95 0.02 15);
-  --popover: oklch(0.20 0.04 15);
+  --popover: oklch(0.2 0.04 15);
   --popover-foreground: oklch(0.95 0.02 15);
   --primary: oklch(0.65 0.18 15);
   --primary-foreground: oklch(0.15 0.05 15);
@@ -320,6 +320,36 @@
   }
 }
 
+/* Windows backdrop material only shows through transparent Electron and
+   renderer surfaces. Keep the content readable while allowing the Mica /
+   Acrylic layer and the selected map background to be visible. */
+html:has(.nexus-glass),
+body:has(.nexus-glass),
+#root:has(.nexus-glass) {
+  background: transparent !important;
+}
+
+.nexus-glass {
+  background: transparent !important;
+}
+
+.nexus-glass .main {
+  background: color-mix(in srgb, var(--background) 48%, transparent);
+  backdrop-filter: blur(22px) saturate(1.18);
+}
+
+.nexus-glass [data-slot='sidebar-inner'] {
+  background: color-mix(in srgb, var(--card) 56%, transparent) !important;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent) !important;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 18%);
+}
+
+.nexus-glass [data-slot='card'] {
+  background: color-mix(in srgb, var(--card) 58%, transparent);
+  border-color: color-mix(in srgb, var(--border) 74%, transparent);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
 .driver-popover {
   background-color: var(--card) !important;
   border: 1px solid var(--stroke) !important;
@@ -407,12 +437,11 @@
   margin-left: 0 !important;
   color: var(--foreground) !important;
   border-color: var(--stroke-power-on) !important;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in oklab, var(--gradient-start-power-on) 56%, transparent),
-      color-mix(in oklab, var(--gradient-end-power-on) 56%, transparent)
-    ) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--gradient-start-power-on) 56%, transparent),
+    color-mix(in oklab, var(--gradient-end-power-on) 56%, transparent)
+  ) !important;
 }
 
 .driver-popover-next-btn:hover,
