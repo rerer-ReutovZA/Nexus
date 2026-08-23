@@ -77,9 +77,15 @@ export function tgwsRuntimeDir(): string {
 }
 
 export function tgwsBinaryPath(): string {
-  // Check runtime dir first (downloaded updates), fall back to bundled resources/.
-  const rt = path.join(tgwsRuntimeDir(), 'TgWsProxy_windows.exe')
-  if (existsSync(rt)) return rt
+  // The upstream Windows release is a tray app. Nexus deliberately uses the
+  // console core built from the same Flowseal source so it owns the only tray.
+  const runtimeCore = path.join(tgwsRuntimeDir(), 'TgWsProxy_core.exe')
+  if (existsSync(runtimeCore)) return runtimeCore
+
+  const bundledCore = path.join(resourcesDir(), 'tgws', 'TgWsProxy_core.exe')
+  if (existsSync(bundledCore)) return bundledCore
+
+  // Compatibility fallback for installations made before the console core.
   return path.join(resourcesDir(), 'tgws', 'TgWsProxy_windows.exe')
 }
 

@@ -146,26 +146,35 @@ async function killStaleTgws(): Promise<boolean> {
   }
 }
 
-async function ensurePortFree(host: string, port: number): Promise<void> {
-  let probe = await tryListen(host, port)
+async function ensurePortFree(host: string, requestedPort: number): Promise<number> {
+  let probe = await tryListen(host, requestedPort)
   if (probe.free === true) {
-    log('info', `port ${port} is free`)
-    return
+    log('info', 'port ' + requestedPort + ' is free')
+    return requestedPort
   }
-  if (probe.code !== 'EADDRINUSE') {
-    log('warn', `unexpected listen error on :${port} → ${probe.code}, continuing`)
-    return
-  }
-  log('warn', `port ${port} is busy, attempting to free it`)
-  await killStaleTgws()
-  probe = await tryListen(host, port)
-  if (probe.free === true) {
-    log('info', `port ${port} freed after cleanup`)
-    return
-  }
-  throw new Error(`port ${port} is occupied and could not be freed`)
-}
 
+  log('warn', 'port ' + requestedPort + ' is unavailable (' + probe.code + '), attempting cleanup')
+  await killStaleTgws()
+  probe = await tryListen(host, requestedPort)
+  if (probe.free === true) {
+    log('info', 'port ' + requestedPort + ' freed after cleanup')
+    return requestedPort
+  }
+
+  // Windows can reserve a port without assigning it to a visible process.
+  // Keep the proxy usable by selecting the next free local port and persist
+  // it, so the displayed tg:// link always matches the active listener.
+  for (let offset = 1; offset <= 20; offset++) {
+    const candidate = requestedPort + offset
+    const candidateProbe = await tryListen(host, candidate)
+    if (candidateProbe.free === true) {
+      log('warn', 'port ' + requestedPort + ' remains unavailable; using ' + candidate)
+      return candidate
+    }
+  }
+
+  throw new Error('port ' + requestedPort + ' is unavailable and no nearby free port was found')
+}
 // ---- pre-flight: cold-boot network wait -----------------------------------
 
 function isColdBoot(): boolean {
@@ -274,14 +283,22 @@ async function startTgwsImpl(): Promise<void> {
 
     // Reload config in case secret was regenerated.
     const cfg = await getAppConfig()
-    const t = cfg.tgws!
+    let t = cfg.tgws!
 
+    // Stop a tray executable left by Nexus versions before 3.0.16. The
+    // replacement console core has no independent tray icon.
+    await killStaleTgws()
     // 2) DC IP defaults ----------------------------------------------------
     const dcIp = normalizeDcIps(t.dcIp)
     log('info', `dc ip list: ${dcIp.join(', ')}`)
 
     // 3) Port pre-check (kill stale instance if needed)
-    await ensurePortFree(t.host, t.port)
+    const selectedPort = await ensurePortFree(t.host, t.port)
+    if (selectedPort !== t.port) {
+      t = { ...t, port: selectedPort }
+      await patchAppConfig({ tgws: t })
+      log('warn', 'Telegram proxy port changed to ' + selectedPort)
+    }
 
     // 4) Cold-boot network sanity check — fire & forget. Even if upstream
     if (isColdBoot()) {
