@@ -23,10 +23,10 @@ interface AppConfig {
   // ---- Appearance & locale
   appTheme: AppTheme
   customTheme?: string
-  customThemeCss?: string          // Legacy CSS payload (deprecated but kept for migration)
-  customThemes?: CustomTheme[]     // User-created visual themes
-  enableVibrancy?: boolean         // Windows 11 Mica/Acrylic
-  enableSounds?: boolean           // Cyberpunk sound effects
+  customThemeCss?: string // Legacy CSS payload (deprecated but kept for migration)
+  customThemes?: CustomTheme[] // User-created visual themes
+  enableVibrancy?: boolean // Windows 11 Mica/Acrylic
+  enableSounds?: boolean // Cyberpunk sound effects
   disableTray?: boolean
   hideTaskbarIcon?: boolean
   autoLaunch?: boolean
@@ -40,7 +40,7 @@ interface AppConfig {
 
   // ---- Updates
   autoCheckUpdate: boolean
-  silentAutoUpdate?: boolean       // Automatically install updates without asking
+  silentAutoUpdate?: boolean // Automatically install updates without asking
   // Tag the user explicitly dismissed via the "Later" button on the
   // full-screen Nexus-update overlay. The overlay stays hidden until
   // GitHub publishes a release with a different tag.
@@ -59,7 +59,7 @@ interface AppConfig {
   disableGPU: boolean
 
   // ---- Plugins
-  enabledPlugins?: string[]        // IDs of currently active plugins
+  enabledPlugins?: string[] // IDs of currently active plugins
   pluginSettings?: Record<string, any> // Plugin-specific configuration data
 
   // ---- Feature-specific sub-configs
@@ -85,18 +85,23 @@ interface AcceleratorConfig {
 interface TgwsConfig {
   enabled: boolean
   autoStart?: boolean
-  host: string            // default 127.0.0.1
-  port: number            // default 1443
-  secret: string          // 32-hex MTProto secret
-  dcIp?: string[]         // e.g. ['2:149.154.167.220']
-  bufKb?: number          // default 256
-  poolSize?: number       // default 4
+  host: string // default 127.0.0.1
+  port: number // default 1443
+  secret: string // 32-hex MTProto secret
+  dcIp?: string[] // e.g. ['2:149.154.167.220']
+  bufKb?: number // default 256
+  poolSize?: number // default 4
   verbose?: boolean
   cfproxy?: boolean
   cfproxyPriority?: boolean
   cfproxyUserDomain?: string
+  cfproxyWorkerDomain?: string
   fakeTlsDomain?: string
-  binaryPath?: string     // override path to TgWsProxy_windows.exe
+  proxyProtocol?: boolean
+  logFile?: string
+  logMaxMb?: number
+  logBackups?: number
+  binaryPath?: string // override path to TgWsProxy_windows.exe
   // Version of the TgWsProxy_windows.exe currently installed in
   // runtime/tgws/. Set by the auto-updater. Used to decide whether a
   // newer Flowseal/tg-ws-proxy release is available.
@@ -116,12 +121,12 @@ interface ZapretProfile {
 interface ZapretConfig {
   enabled: boolean
   autoStart?: boolean
-  activeStrategy?: string          // file name of the .bat strategy
+  activeStrategy?: string // file name of the .bat strategy
   gameFilter?: 'disabled' | 'all' | 'tcp' | 'udp'
   ipsetMode?: 'none' | 'loaded' | 'any'
-  profiles?: ZapretProfile[]       // User-editable profiles
-  bundlePath?: string              // override path to unpacked zapret folder
-  useService?: boolean             // installed as Windows service
+  profiles?: ZapretProfile[] // User-editable profiles
+  bundlePath?: string // override path to unpacked zapret folder
+  useService?: boolean // installed as Windows service
   // Version of the unpacked Flowseal/zapret-discord-youtube bundle in
   // runtime/zapret. Set when the user installs/updates from the auto-
   // updater. Used to decide whether a newer GitHub release exists.
@@ -129,8 +134,8 @@ interface ZapretConfig {
   // ISO timestamp + tag the user explicitly dismissed via "Later". The
   // updater will stay quiet for that exact tag until a newer one ships.
   dismissedUpdateTag?: string
-  listUpdateUrl?: string           // Community list URL for auto-update
-  autoUpdateList?: boolean         // Enable background community list auto-update
+  listUpdateUrl?: string // Community list URL for auto-update
+  autoUpdateList?: boolean // Enable background community list auto-update
 }
 
 type CoreStatusState = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'

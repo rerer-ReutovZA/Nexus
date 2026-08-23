@@ -19,14 +19,13 @@ export const patchAppConfig = (patch: Partial<AppConfig>): Promise<void> =>
 export const getAppVersion = (): Promise<string> => invoke('app:version')
 
 // ---- Theme ------------------------------------------------------------------
-export const setNativeTheme = (theme: AppTheme): Promise<void> =>
-  invoke('theme:setNative', theme)
+export const setNativeTheme = (theme: AppTheme): Promise<void> => invoke('theme:setNative', theme)
 export const applyTheme = (file: string): Promise<void> => invoke('theme:apply', file)
 
 // ---- Utility ----------------------------------------------------------------
-export const openTelegramLink = (url: string): Promise<void> => invoke('shell:openTelegramLink', url)
-export const writeClipboard = (text: string): Promise<void> =>
-  invoke('clipboard:writeText', text)
+export const openTelegramLink = (url: string): Promise<void> =>
+  invoke('shell:openTelegramLink', url)
+export const writeClipboard = (text: string): Promise<void> => invoke('clipboard:writeText', text)
 
 export interface PingResult {
   service: string
@@ -58,15 +57,21 @@ export const tgwsCheckUpdate = (force = false): Promise<TgwsUpdateInfo> =>
 export const tgwsInstallUpdate = (
   url: string,
   expectedVersion?: string
-): Promise<{ installedVersion?: string; sizeBytes: number }> =>
-  invoke('tgws:installUpdate', url, expectedVersion)
-export const tgwsDismissUpdate = (tag: string): Promise<void> =>
-  invoke('tgws:dismissUpdate', tag)
+): Promise<{
+  installedVersion?: string
+  sizeBytes: number
+  restarted: boolean
+  restartError?: string
+}> => invoke('tgws:installUpdate', url, expectedVersion)
+export const tgwsDismissUpdate = (tag: string): Promise<void> => invoke('tgws:dismissUpdate', tag)
+export const tgwsRestoreBundled = (): Promise<{ restarted: boolean; restartError?: string }> =>
+  invoke('tgws:restoreBundled')
 
 // ---- Zapret -----------------------------------------------------------------
 export const zapretStatus = (): Promise<CoreStatus> => invoke('zapret:status')
-export const zapretListStrategies = (): Promise<{ file: string; title: string; description: string }[]> =>
-  invoke('zapret:listStrategies')
+export const zapretListStrategies = (): Promise<
+  { file: string; title: string; description: string }[]
+> => invoke('zapret:listStrategies')
 export const zapretStart = (): Promise<void> => invoke('zapret:start')
 export const zapretStop = (): Promise<void> => invoke('zapret:stop')
 export const zapretRestart = (): Promise<void> => invoke('zapret:restart')
@@ -172,10 +177,8 @@ export const appCheckUpdate = (force = false): Promise<AppUpdateInfo> =>
 export const appInstallUpdate = (
   url: string,
   expectedVersion?: string
-): Promise<{ scheduled: true }> =>
-  invoke('app:installUpdate', url, expectedVersion)
-export const appDismissUpdate = (tag: string): Promise<void> =>
-  invoke('app:dismissUpdate', tag)
+): Promise<{ scheduled: true }> => invoke('app:installUpdate', url, expectedVersion)
+export const appDismissUpdate = (tag: string): Promise<void> => invoke('app:dismissUpdate', tag)
 
 // ---- App control ------------------------------------------------------------
 export const appQuit = (): Promise<void> => invoke('app:quit')

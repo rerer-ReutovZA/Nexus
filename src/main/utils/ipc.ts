@@ -1,13 +1,7 @@
 import { ipcMain, app, shell, clipboard, BrowserWindow } from 'electron'
 import { getAppConfig, patchAppConfig } from '../config'
 import { applyTheme, setNativeTheme } from '../resolve/theme'
-import {
-  getTgwsStatus,
-  startTgws,
-  stopTgws,
-  restartTgws,
-  getTgwsLink
-} from '../core/tgws'
+import { getTgwsStatus, startTgws, stopTgws, restartTgws, getTgwsLink } from '../core/tgws'
 import {
   getZapretStatus,
   startZapret,
@@ -16,11 +10,7 @@ import {
   listStrategies,
   installZapretBundle
 } from '../core/zapret'
-import {
-  checkZapretUpdate,
-  installZapretUpdate,
-  dismissZapretUpdate
-} from '../core/zapret-updater'
+import { checkZapretUpdate, installZapretUpdate, dismissZapretUpdate } from '../core/zapret-updater'
 import {
   runStrategyTests,
   getStrategyTestResults,
@@ -38,21 +28,13 @@ import {
 import {
   checkTgwsUpdate,
   installTgwsUpdate,
-  dismissTgwsUpdate
+  dismissTgwsUpdate,
+  restoreBundledTgws
 } from '../core/tgws-updater'
-import {
-  checkAppUpdate,
-  installAppUpdate,
-  dismissAppUpdate
-} from '../core/app-updater'
+import { checkAppUpdate, installAppUpdate, dismissAppUpdate } from '../core/app-updater'
 import { pingServices } from '../core/ping'
 import { cleanDiscordCache } from '../core/cleaners'
-import {
-  getSingboxStatus,
-  startSingbox,
-  stopSingbox,
-  restartSingbox
-} from '../core/singbox'
+import { getSingboxStatus, startSingbox, stopSingbox, restartSingbox } from '../core/singbox'
 import { pluginManager } from '../core/plugin-manager'
 import { execFile } from 'node:child_process'
 import { writeFileSync, unlinkSync } from 'node:fs'
@@ -85,14 +67,13 @@ function openTgLinkViaScheduler(url: string, fellBack: { v: boolean }): boolean 
     const trCommand = `wscript.exe //B //Nologo "${vbsPath}"`
 
     const cleanup = (): void => {
-      execFile(
-        'schtasks.exe',
-        ['/Delete', '/F', '/TN', taskName],
-        { windowsHide: true },
-        () => {
-          try { unlinkSync(vbsPath) } catch { /* noop */ }
+      execFile('schtasks.exe', ['/Delete', '/F', '/TN', taskName], { windowsHide: true }, () => {
+        try {
+          unlinkSync(vbsPath)
+        } catch {
+          /* noop */
         }
-      )
+      })
     }
 
     // /SC ONCE wants a future-ish time. We use the far future so the
@@ -100,14 +81,21 @@ function openTgLinkViaScheduler(url: string, fellBack: { v: boolean }): boolean 
     execFile(
       'schtasks.exe',
       [
-        '/Create', '/F',
-        '/TN', taskName,
-        '/TR', trCommand,
-        '/SC', 'ONCE',
-        '/ST', '23:59',
-        '/SD', '01/01/2099',
+        '/Create',
+        '/F',
+        '/TN',
+        taskName,
+        '/TR',
+        trCommand,
+        '/SC',
+        'ONCE',
+        '/ST',
+        '23:59',
+        '/SD',
+        '01/01/2099',
         '/IT',
-        '/RL', 'LIMITED'
+        '/RL',
+        'LIMITED'
       ],
       { windowsHide: true },
       (createErr, _stdout, createStderr) => {
@@ -117,7 +105,11 @@ function openTgLinkViaScheduler(url: string, fellBack: { v: boolean }): boolean 
             fellBack.v = true
             tryFallbackOpen(url)
           }
-          try { unlinkSync(vbsPath) } catch { /* noop */ }
+          try {
+            unlinkSync(vbsPath)
+          } catch {
+            /* noop */
+          }
           return
         }
         execFile(
@@ -179,173 +171,335 @@ function h<T>(fn: (...args: unknown[]) => Promise<T> | T) {
 
 export function registerIpcMainHandlers(): void {
   // ---- App config ---------------------------------------------------------
-  ipcMain.handle('app:getConfig', h(() => getAppConfig()))
-  ipcMain.handle('app:patchConfig', h((patch) => patchAppConfig(patch as Partial<AppConfig>)))
-  ipcMain.handle('app:version', h(() => app.getVersion()))
+  ipcMain.handle(
+    'app:getConfig',
+    h(() => getAppConfig())
+  )
+  ipcMain.handle(
+    'app:patchConfig',
+    h((patch) => patchAppConfig(patch as Partial<AppConfig>))
+  )
+  ipcMain.handle(
+    'app:version',
+    h(() => app.getVersion())
+  )
 
   // ---- Theme --------------------------------------------------------------
-  ipcMain.handle('theme:setNative', h((theme) => setNativeTheme(theme as AppTheme)))
-  ipcMain.handle('theme:apply', h((file) => applyTheme(file as string)))
+  ipcMain.handle(
+    'theme:setNative',
+    h((theme) => setNativeTheme(theme as AppTheme))
+  )
+  ipcMain.handle(
+    'theme:apply',
+    h((file) => applyTheme(file as string))
+  )
 
   // ---- Utility ------------------------------------------------------------
-  ipcMain.handle('shell:openTelegramLink', h((url) => openTelegramLink(url as string)))
-  ipcMain.handle('clipboard:writeText', h((text) => { clipboard.writeText(text as string) }))
-  ipcMain.handle('net:pingServices', h(() => pingServices()))
-  ipcMain.handle('net:pingHost', h(async (host: string, port: number) => {
-    const { Socket } = await import('node:net')
-    return new Promise((resolve) => {
-      const socket = new Socket()
-      const start = process.hrtime.bigint()
-      
-      const safety = setTimeout(() => {
-        socket.destroy()
-        resolve({ status: 'timeout', latency: -1 })
-      }, 4000)
-
-      socket.setTimeout(3500)
-      
-      const finish = (status: string) => {
-        clearTimeout(safety)
-        const end = process.hrtime.bigint()
-        socket.destroy()
-        const latency = Number(end - start) / 1_000_000
-        // If latency is too low (< 5ms), it's likely a local interception or loopback
-        // We'll add a small 'jitter' or just report it as is, but usually real internet hosts are > 10ms.
-        resolve({ status, latency: status === 'ok' ? Math.round(latency) : -1 })
-      }
-
-      socket.on('connect', () => finish('ok'))
-      socket.on('error', () => finish('error'))
-      socket.on('timeout', () => finish('timeout'))
-      
-      // Disable Nagle's algorithm for more accurate measurement
-      socket.setNoDelay(true)
-      
-      try {
-        socket.connect(port || 443, host)
-      } catch (e) {
-        finish('error')
-      }
+  ipcMain.handle(
+    'shell:openTelegramLink',
+    h((url) => openTelegramLink(url as string))
+  )
+  ipcMain.handle(
+    'clipboard:writeText',
+    h((text) => {
+      clipboard.writeText(text as string)
     })
-  }))
-  ipcMain.handle('app:cleanDiscordCache', h(() => cleanDiscordCache()))
-  ipcMain.handle('app:getRunningProcesses', h(async () => {
-    if (process.platform !== 'win32') return []
-    const { exec } = await import('node:child_process')
-    return new Promise((resolve) => {
-      exec('tasklist /NH /FO CSV', (err, stdout) => {
-        if (err) return resolve([])
-        const lines = stdout.split('\n').filter(l => l.trim())
-        const names = lines.map(line => {
-          const parts = line.split(',')
-          return parts[0] ? parts[0].replace(/"/g, '') : ''
-        }).filter(n => n.toLowerCase().endsWith('.exe'))
-        resolve([...new Set(names)].sort())
+  )
+  ipcMain.handle(
+    'net:pingServices',
+    h(() => pingServices())
+  )
+  ipcMain.handle(
+    'net:pingHost',
+    h(async (host: string, port: number) => {
+      const { Socket } = await import('node:net')
+      return new Promise((resolve) => {
+        const socket = new Socket()
+        const start = process.hrtime.bigint()
+
+        const safety = setTimeout(() => {
+          socket.destroy()
+          resolve({ status: 'timeout', latency: -1 })
+        }, 4000)
+
+        socket.setTimeout(3500)
+
+        const finish = (status: string) => {
+          clearTimeout(safety)
+          const end = process.hrtime.bigint()
+          socket.destroy()
+          const latency = Number(end - start) / 1_000_000
+          // If latency is too low (< 5ms), it's likely a local interception or loopback
+          // We'll add a small 'jitter' or just report it as is, but usually real internet hosts are > 10ms.
+          resolve({ status, latency: status === 'ok' ? Math.round(latency) : -1 })
+        }
+
+        socket.on('connect', () => finish('ok'))
+        socket.on('error', () => finish('error'))
+        socket.on('timeout', () => finish('timeout'))
+
+        // Disable Nagle's algorithm for more accurate measurement
+        socket.setNoDelay(true)
+
+        try {
+          socket.connect(port || 443, host)
+        } catch (e) {
+          finish('error')
+        }
       })
     })
-  }))
+  )
+  ipcMain.handle(
+    'app:cleanDiscordCache',
+    h(() => cleanDiscordCache())
+  )
+  ipcMain.handle(
+    'app:getRunningProcesses',
+    h(async () => {
+      if (process.platform !== 'win32') return []
+      const { exec } = await import('node:child_process')
+      return new Promise((resolve) => {
+        exec('tasklist /NH /FO CSV', (err, stdout) => {
+          if (err) return resolve([])
+          const lines = stdout.split('\n').filter((l) => l.trim())
+          const names = lines
+            .map((line) => {
+              const parts = line.split(',')
+              return parts[0] ? parts[0].replace(/"/g, '') : ''
+            })
+            .filter((n) => n.toLowerCase().endsWith('.exe'))
+          resolve([...new Set(names)].sort())
+        })
+      })
+    })
+  )
 
   // ---- TG WS Proxy --------------------------------------------------------
-  ipcMain.handle('tgws:status', h(() => getTgwsStatus()))
-  ipcMain.handle('tgws:start', h(() => startTgws()))
-  ipcMain.handle('tgws:stop', h(() => stopTgws()))
-  ipcMain.handle('tgws:restart', h(() => restartTgws()))
-  ipcMain.handle('tgws:getLink', h(() => getTgwsLink()))
-  ipcMain.handle('tgws:checkUpdate', h((force) => checkTgwsUpdate(Boolean(force))))
-  ipcMain.handle('tgws:installUpdate', h((url, expectedVersion) =>
-    installTgwsUpdate(url as string, expectedVersion as string | undefined)
-  ))
-  ipcMain.handle('tgws:dismissUpdate', h((tag) => dismissTgwsUpdate(tag as string)))
+  ipcMain.handle(
+    'tgws:status',
+    h(() => getTgwsStatus())
+  )
+  ipcMain.handle(
+    'tgws:start',
+    h(() => startTgws())
+  )
+  ipcMain.handle(
+    'tgws:stop',
+    h(() => stopTgws())
+  )
+  ipcMain.handle(
+    'tgws:restart',
+    h(() => restartTgws())
+  )
+  ipcMain.handle(
+    'tgws:getLink',
+    h(() => getTgwsLink())
+  )
+  ipcMain.handle(
+    'tgws:checkUpdate',
+    h((force) => checkTgwsUpdate(Boolean(force)))
+  )
+  ipcMain.handle(
+    'tgws:installUpdate',
+    h((url, expectedVersion) =>
+      installTgwsUpdate(url as string, expectedVersion as string | undefined)
+    )
+  )
+  ipcMain.handle(
+    'tgws:dismissUpdate',
+    h((tag) => dismissTgwsUpdate(tag as string))
+  )
+  ipcMain.handle(
+    'tgws:restoreBundled',
+    h(() => restoreBundledTgws())
+  )
 
   // ---- Zapret -------------------------------------------------------------
-  ipcMain.handle('zapret:status', h(() => getZapretStatus()))
-  ipcMain.handle('zapret:listStrategies', h(() => listStrategies()))
-  ipcMain.handle('zapret:start', h(() => startZapret()))
-  ipcMain.handle('zapret:stop', h(() => stopZapret()))
-  ipcMain.handle('zapret:restart', h(() => restartZapret()))
-  ipcMain.handle('zapret:installBundle', h((bytes) =>
-    installZapretBundle(bytes as Uint8Array)
-  ))
-  ipcMain.handle('zapret:checkUpdate', h((force) => checkZapretUpdate(Boolean(force))))
-  ipcMain.handle('zapret:installUpdate', h((url, expectedVersion) =>
-    installZapretUpdate(url as string, expectedVersion as string | undefined)
-  ))
-  ipcMain.handle('zapret:dismissUpdate', h((tag) => dismissZapretUpdate(tag as string)))
+  ipcMain.handle(
+    'zapret:status',
+    h(() => getZapretStatus())
+  )
+  ipcMain.handle(
+    'zapret:listStrategies',
+    h(() => listStrategies())
+  )
+  ipcMain.handle(
+    'zapret:start',
+    h(() => startZapret())
+  )
+  ipcMain.handle(
+    'zapret:stop',
+    h(() => stopZapret())
+  )
+  ipcMain.handle(
+    'zapret:restart',
+    h(() => restartZapret())
+  )
+  ipcMain.handle(
+    'zapret:installBundle',
+    h((bytes) => installZapretBundle(bytes as Uint8Array))
+  )
+  ipcMain.handle(
+    'zapret:checkUpdate',
+    h((force) => checkZapretUpdate(Boolean(force)))
+  )
+  ipcMain.handle(
+    'zapret:installUpdate',
+    h((url, expectedVersion) =>
+      installZapretUpdate(url as string, expectedVersion as string | undefined)
+    )
+  )
+  ipcMain.handle(
+    'zapret:dismissUpdate',
+    h((tag) => dismissZapretUpdate(tag as string))
+  )
 
   // ---- Zapret strategy tester --------------------------------------------
-  ipcMain.handle('zapret:runStrategyTest', h(() => runStrategyTests()))
-  ipcMain.handle('zapret:getStrategyTestResults', h(() => getStrategyTestResults()))
-  ipcMain.handle('zapret:isStrategyTestRunning', h(() => isStrategyTestRunning()))
+  ipcMain.handle(
+    'zapret:runStrategyTest',
+    h(() => runStrategyTests())
+  )
+  ipcMain.handle(
+    'zapret:getStrategyTestResults',
+    h(() => getStrategyTestResults())
+  )
+  ipcMain.handle(
+    'zapret:isStrategyTestRunning',
+    h(() => isStrategyTestRunning())
+  )
 
   // ---- Zapret IP list (ipset-all.txt) ------------------------------------
-  ipcMain.handle('zapret:getCuratedIpSets', h(() => getCuratedIpSets()))
-  ipcMain.handle('zapret:getIpList', h(() => getIpListSnapshot()))
-  ipcMain.handle('zapret:applyIpListPatch', h((patch) =>
-    applyIpListPatch((patch ?? {}) as IpListPatch)
-  ))
-  ipcMain.handle('zapret:clearIpList', h(() => clearIpList()))
-  ipcMain.handle('zapret:restoreIpListBackup', h(() => restoreIpListBackup()))
-  ipcMain.handle('zapret:updateCommunityList', h((url) => updateCommunityList(url as string)))
+  ipcMain.handle(
+    'zapret:getCuratedIpSets',
+    h(() => getCuratedIpSets())
+  )
+  ipcMain.handle(
+    'zapret:getIpList',
+    h(() => getIpListSnapshot())
+  )
+  ipcMain.handle(
+    'zapret:applyIpListPatch',
+    h((patch) => applyIpListPatch((patch ?? {}) as IpListPatch))
+  )
+  ipcMain.handle(
+    'zapret:clearIpList',
+    h(() => clearIpList())
+  )
+  ipcMain.handle(
+    'zapret:restoreIpListBackup',
+    h(() => restoreIpListBackup())
+  )
+  ipcMain.handle(
+    'zapret:updateCommunityList',
+    h((url) => updateCommunityList(url as string))
+  )
 
   // ---- Nexus self-update ----------------------------------------------
-  ipcMain.handle('app:checkUpdate', h((force) => checkAppUpdate(Boolean(force))))
-  ipcMain.handle('app:installUpdate', h((url, expectedVersion) =>
-    installAppUpdate(url as string, expectedVersion as string | undefined)
-  ))
-  ipcMain.handle('app:dismissUpdate', h((tag) => dismissAppUpdate(tag as string)))
+  ipcMain.handle(
+    'app:checkUpdate',
+    h((force) => checkAppUpdate(Boolean(force)))
+  )
+  ipcMain.handle(
+    'app:installUpdate',
+    h((url, expectedVersion) =>
+      installAppUpdate(url as string, expectedVersion as string | undefined)
+    )
+  )
+  ipcMain.handle(
+    'app:dismissUpdate',
+    h((tag) => dismissAppUpdate(tag as string))
+  )
 
   // ---- Sing-box -----------------------------------------------------------
-  ipcMain.handle('singbox:status', h(() => getSingboxStatus()))
-  ipcMain.handle('singbox:start', h(() => startSingbox()))
-  ipcMain.handle('singbox:stop', h(() => stopSingbox()))
-  ipcMain.handle('singbox:restart', h(() => restartSingbox()))
-  ipcMain.handle('sub:fetch', h(async (url: string) => {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    let text = await res.text()
-    
-    if (!text.includes('://')) {
-      try { text = Buffer.from(text, 'base64').toString('utf8') } catch { /* ignore */ }
-    }
+  ipcMain.handle(
+    'singbox:status',
+    h(() => getSingboxStatus())
+  )
+  ipcMain.handle(
+    'singbox:start',
+    h(() => startSingbox())
+  )
+  ipcMain.handle(
+    'singbox:stop',
+    h(() => stopSingbox())
+  )
+  ipcMain.handle(
+    'singbox:restart',
+    h(() => restartSingbox())
+  )
+  ipcMain.handle(
+    'sub:fetch',
+    h(async (url: string) => {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      let text = await res.text()
 
-    const lines = text.split(/\r?\n/).filter(l => l.trim())
-    const proxies = lines.map((line, i) => {
-      try {
-        const urlObj = new URL(line)
-        const name = decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i+1}`
-        const params = urlObj.searchParams
-
-        return {
-          id: Math.random().toString(36).slice(2),
-          name,
-          type: urlObj.protocol.replace(':', '').toUpperCase(),
-          address: urlObj.hostname,
-          port: parseInt(urlObj.port),
-          uuid: urlObj.username,
-          sni: params.get('sni') || '',
-          pbk: params.get('pbk') || '',     // Reality Public Key
-          sid: params.get('sid') || '',     // Reality Short ID
-          flow: params.get('flow') || '',   // VLESS XTLS flow
-          fp: params.get('fp') || 'chrome', // Fingerprint
-          full: line
+      if (!text.includes('://')) {
+        try {
+          text = Buffer.from(text, 'base64').toString('utf8')
+        } catch {
+          /* ignore */
         }
-      } catch { return null }
-    }).filter(Boolean)
-    
-    return proxies
-  }))
+      }
+
+      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+      const proxies = lines
+        .map((line, i) => {
+          try {
+            const urlObj = new URL(line)
+            const name = decodeURIComponent(urlObj.hash.slice(1)) || `Server ${i + 1}`
+            const params = urlObj.searchParams
+
+            return {
+              id: Math.random().toString(36).slice(2),
+              name,
+              type: urlObj.protocol.replace(':', '').toUpperCase(),
+              address: urlObj.hostname,
+              port: parseInt(urlObj.port),
+              uuid: urlObj.username,
+              sni: params.get('sni') || '',
+              pbk: params.get('pbk') || '', // Reality Public Key
+              sid: params.get('sid') || '', // Reality Short ID
+              flow: params.get('flow') || '', // VLESS XTLS flow
+              fp: params.get('fp') || 'chrome', // Fingerprint
+              full: line
+            }
+          } catch {
+            return null
+          }
+        })
+        .filter(Boolean)
+
+      return proxies
+    })
+  )
 
   // ---- Plugins ------------------------------------------------------------
-  ipcMain.handle('plugin:list', h(() => pluginManager.getAvailablePlugins()))
-  ipcMain.handle('plugin:reload', h(() => pluginManager.reloadPlugins()))
-  ipcMain.handle('plugin:getDir', h(() => pluginManager.getPluginsDir()))
+  ipcMain.handle(
+    'plugin:list',
+    h(() => pluginManager.getAvailablePlugins())
+  )
+  ipcMain.handle(
+    'plugin:reload',
+    h(() => pluginManager.reloadPlugins())
+  )
+  ipcMain.handle(
+    'plugin:getDir',
+    h(() => pluginManager.getPluginsDir())
+  )
 
   // ---- Quit / restart -----------------------------------------------------
-  ipcMain.handle('app:quit', h(() => app.quit()))
-  ipcMain.handle('app:relaunch', h(() => {
-    app.relaunch()
-    app.exit(0)
-  }))
+  ipcMain.handle(
+    'app:quit',
+    h(() => app.quit())
+  )
+  ipcMain.handle(
+    'app:relaunch',
+    h(() => {
+      app.relaunch()
+      app.exit(0)
+    })
+  )
 
   // ---- Window controls (called from window-controls.tsx & i18n.ts) -------
   // These were noisy "No handler registered" errors before; persisting the

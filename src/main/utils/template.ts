@@ -35,7 +35,8 @@ export const defaultConfig: AppConfig = {
   enabledPlugins: [],
   pluginSettings: {
     'game-trigger': {
-      processes: 'RobloxPlayerBeta.exe, Steam.exe, Discord.exe, RobloxPlayerLauncher.exe, Dota2.exe',
+      processes:
+        'RobloxPlayerBeta.exe, Steam.exe, Discord.exe, RobloxPlayerLauncher.exe, Dota2.exe',
       zapretProfile: '1',
       enableAccelerator: false,
       checkInterval: 10
@@ -76,7 +77,12 @@ export const defaultConfig: AppConfig = {
     cfproxy: true,
     cfproxyPriority: true,
     cfproxyUserDomain: '',
-    fakeTlsDomain: ''
+    cfproxyWorkerDomain: '',
+    fakeTlsDomain: '',
+    proxyProtocol: false,
+    logFile: '',
+    logMaxMb: 5,
+    logBackups: 0
   },
   zapret: {
     enabled: false,

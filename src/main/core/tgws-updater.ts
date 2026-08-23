@@ -1,12 +1,12 @@
-import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, renameSync, writeFileSync } from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
 import { tgwsRuntimeDir } from '../utils/dirs'
 import { getAppConfig, patchAppConfig } from '../config'
 import { loadUpdateCache, saveUpdateCache } from '../utils/update-cache'
-import { stopTgws, getTgwsStatus } from './tgws'
+import { startTgws, stopTgws, getTgwsStatus } from './tgws'
 
-const REPO = 'tenstepsbeforedecay/slipgate-tgws-cli'
+const REPO = 'Flowseal/tg-ws-proxy'
 const RELEASES_LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 const REQUEST_HEADERS: Record<string, string> = {
   'User-Agent': 'Nexus-Updater',
@@ -118,7 +118,9 @@ export async function checkTgwsUpdate(force = false): Promise<TgwsUpdateInfo> {
     if (!res.ok) throw new Error(`GitHub API ${res.status}`)
     release = (await res.json()) as GhRelease
   } catch (e) {
-    throw new Error(`Не удалось проверить обновления TgWsProxy: ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(
+      `Не удалось проверить обновления TgWsProxy: ${e instanceof Error ? e.message : String(e)}`
+    )
   }
 
   const latestRaw = release.tag_name ?? release.name ?? ''
@@ -168,22 +170,52 @@ async function killStaleTgwsBinary(): Promise<void> {
   await new Promise((r) => setTimeout(r, 300))
 }
 
+async function validateTgwsBinary(bin: string): Promise<void> {
+  const result = await new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+    const probe = spawn(bin, ['--help'], { windowsHide: true })
+    let output = ''
+    const collect = (chunk: Buffer): void => {
+      output = `${output}${chunk.toString()}`.slice(-4096)
+    }
+    const timeout = setTimeout(() => {
+      try {
+        probe.kill('SIGKILL')
+      } catch {
+        /* noop */
+      }
+      reject(new Error('проверка запуска превысила 10 секунд'))
+    }, 10_000)
+    probe.stdout?.on('data', collect)
+    probe.stderr?.on('data', collect)
+    probe.on('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    probe.on('exit', (code) => {
+      clearTimeout(timeout)
+      resolve({ code, output })
+    })
+  })
+  if (result.code === 0) return
+  if (/ModuleNotFoundError:\s*No module named ['"]certifi['"]/i.test(result.output)) {
+    throw new Error(
+      'официальный TgWsProxy v1.10.0 сейчас неработоспособен: в пакете отсутствует модуль certifi. Рабочий файл не был заменён.'
+    )
+  }
+  throw new Error(
+    `проверка нового TgWsProxy завершилась с кодом ${result.code ?? 'unknown'}: ${result.output.trim().slice(-500)}`
+  )
+}
 export async function installTgwsUpdate(
   assetUrl: string,
   expectedVersion?: string
-): Promise<{ installedVersion?: string; sizeBytes: number }> {
+): Promise<{
+  installedVersion?: string
+  sizeBytes: number
+  restarted: boolean
+  restartError?: string
+}> {
   if (!assetUrl) throw new Error('Пустая ссылка на бинарник')
-
-  // Stop the currently-running tgws first so its on-disk .exe isn't write-
-  // locked. Mirrors the zapret install flow.
-  const st = getTgwsStatus()
-  if (st.state === 'running' || st.state === 'starting') {
-    try { await stopTgws() } catch { /* best-effort */ }
-  }
-  // Even after our managed stop there can be a stray TgWsProxy_windows.exe
-  // (manual user launch, prior crash) — wipe everything matching the image
-  // name before writing.
-  await killStaleTgwsBinary()
 
   let buf: Buffer
   try {
@@ -204,11 +236,53 @@ export async function installTgwsUpdate(
   const dir = tgwsRuntimeDir()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   const dest = path.join(dir, 'TgWsProxy_windows.exe')
-  writeFileSync(dest, buf)
+  const candidate = path.join(dir, `TgWsProxy_windows.pending-${Date.now()}.exe`)
+  writeFileSync(candidate, buf)
+  try {
+    // A release can be downloaded successfully yet still be broken at startup.
+    // Validate it before touching the user's currently working executable.
+    await validateTgwsBinary(candidate)
+  } catch (e) {
+    try {
+      renameSync(candidate, `${candidate}.rejected`)
+    } catch {
+      /* noop */
+    }
+    throw e
+  }
+
+  const cfg = await getAppConfig()
+  const st = getTgwsStatus()
+  const shouldRestart = st.state === 'running' || st.state === 'starting' || !!cfg.tgws?.autoStart
+  if (st.state === 'running' || st.state === 'starting') {
+    try {
+      await stopTgws()
+    } catch {
+      /* best-effort */
+    }
+  }
+  await killStaleTgwsBinary()
+
+  let backup: string | undefined
+  if (existsSync(dest)) {
+    backup = path.join(dir, `TgWsProxy_windows.previous-${Date.now()}.exe`)
+    renameSync(dest, backup)
+  }
+  try {
+    renameSync(candidate, dest)
+  } catch (e) {
+    if (backup && existsSync(backup)) {
+      try {
+        renameSync(backup, dest)
+      } catch {
+        /* noop */
+      }
+    }
+    throw e
+  }
 
   // Persist version + clear "Later" dismissal.
   const finalVersion = expectedVersion || undefined
-  const cfg = await getAppConfig()
   const next: TgwsConfig = {
     ...(cfg.tgws as TgwsConfig),
     installedVersion: finalVersion ?? cfg.tgws?.installedVersion,
@@ -217,9 +291,50 @@ export async function installTgwsUpdate(
   await patchAppConfig({ tgws: next })
 
   cache = null
-  return { installedVersion: finalVersion, sizeBytes: buf.length }
+  let restarted = false
+  let restartError: string | undefined
+  if (shouldRestart) {
+    try {
+      await startTgws()
+      restarted = true
+    } catch (e) {
+      restartError = e instanceof Error ? e.message : String(e)
+    }
+  }
+  return { installedVersion: finalVersion, sizeBytes: buf.length, restarted, restartError }
 }
 
+export async function restoreBundledTgws(): Promise<{ restarted: boolean; restartError?: string }> {
+  const st = getTgwsStatus()
+  if (st.state === 'running' || st.state === 'starting') {
+    try {
+      await stopTgws()
+    } catch {
+      /* best-effort */
+    }
+  }
+  await killStaleTgwsBinary()
+
+  const dir = tgwsRuntimeDir()
+  const runtime = path.join(dir, 'TgWsProxy_windows.exe')
+  if (existsSync(runtime)) {
+    const cfg = await getAppConfig()
+    const version = (cfg.tgws?.installedVersion ?? 'unknown').replace(/[^\w.-]/g, '_')
+    renameSync(runtime, path.join(dir, `TgWsProxy_windows.disabled-${version}-${Date.now()}.exe`))
+  }
+
+  const cfg = await getAppConfig()
+  await patchAppConfig({ tgws: { ...(cfg.tgws as TgwsConfig), installedVersion: undefined } })
+  let restarted = false
+  let restartError: string | undefined
+  try {
+    await startTgws()
+    restarted = true
+  } catch (e) {
+    restartError = e instanceof Error ? e.message : String(e)
+  }
+  return { restarted, restartError }
+}
 export async function dismissTgwsUpdate(tag: string): Promise<void> {
   if (!tag) return
   const cfg = await getAppConfig()

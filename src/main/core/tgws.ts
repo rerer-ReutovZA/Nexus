@@ -23,6 +23,47 @@ const COLD_BOOT_THRESHOLD_S = 180
 const NETWORK_WAIT_TIMEOUT_MS = 30_000
 const SECRET_HEX_LEN = 32
 
+function normalizeDcIps(dcList: string[] | undefined): string[] {
+  const entries = (dcList ?? [])
+    .flatMap((entry) => (typeof entry === 'string' ? entry.split(/[\r\n,]+/) : []))
+    .map((entry) => entry.replace(/\s+/g, ''))
+    .filter(Boolean)
+
+  if (!entries.length) return [...DEFAULT_DC_IPS]
+
+  const invalid = entries.filter((entry) => {
+    const match = /^(\d+):(\d{1,3}(?:\.\d{1,3}){3})$/.exec(entry)
+    if (!match || Number(match[1]) < 1 || Number(match[1]) > 5) return true
+    return match[2].split('.').some((part) => Number(part) > 255)
+  })
+  if (invalid.length) {
+    throw new Error(`Некорректный DC IP: ${invalid.join(', ')}. Формат: 2:149.154.167.220`)
+  }
+  return [...new Set(entries)]
+}
+
+function splitDomains(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[\r\n,]+/)
+    .map((domain) => domain.trim())
+    .filter(Boolean)
+}
+
+function describeTgwsExit(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  output: string
+): string | undefined {
+  if (code === 0 || signal === 'SIGTERM') return undefined
+  const details = output.trim()
+  if (/ModuleNotFoundError:\s*No module named ['"]certifi['"]/i.test(details)) {
+    return 'TgWsProxy v1.10.0 не запускается: в официальном файле отсутствует модуль certifi. Восстановите встроенную версию и дождитесь исправленного релиза Flowseal.'
+  }
+  const exit =
+    code != null ? `exited with code ${code}` : `stopped by ${signal ?? 'an unknown signal'}`
+  return details ? `TgWsProxy ${exit}: ${details.slice(-500)}` : `TgWsProxy ${exit}`
+}
+
 // ---- broadcasting helpers --------------------------------------------------
 
 function broadcast(channel: string, ...args: unknown[]): void {
@@ -67,7 +108,10 @@ async function ensureSecret(current: string | undefined): Promise<string> {
 
 // ---- pre-flight: port availability ----------------------------------------
 
-function tryListen(host: string, port: number): Promise<{ free: true } | { free: false; code: string }> {
+function tryListen(
+  host: string,
+  port: number
+): Promise<{ free: true } | { free: false; code: string }> {
   return new Promise((resolve) => {
     const srv = createServer()
     srv.unref()
@@ -139,7 +183,11 @@ function tcpPing(ip: string, port: number, timeoutMs: number): Promise<boolean> 
     const finish = (ok: boolean): void => {
       if (done) return
       done = true
-      try { sock.destroy() } catch { /* noop */ }
+      try {
+        sock.destroy()
+      } catch {
+        /* noop */
+      }
       resolve(ok)
     }
     sock.setTimeout(timeoutMs)
@@ -186,7 +234,10 @@ let opLock: Promise<void> = Promise.resolve()
 function withLock<T>(fn: () => Promise<T>): Promise<T> {
   const next = opLock.then(fn, fn)
   // Make sure a rejected operation never poisons the chain for the next one.
-  opLock = next.then(() => undefined, () => undefined)
+  opLock = next.then(
+    () => undefined,
+    () => undefined
+  )
   return next
 }
 
@@ -226,7 +277,7 @@ async function startTgwsImpl(): Promise<void> {
     const t = cfg.tgws!
 
     // 2) DC IP defaults ----------------------------------------------------
-    const dcIp = (t.dcIp && t.dcIp.length > 0 ? t.dcIp : [...DEFAULT_DC_IPS])
+    const dcIp = normalizeDcIps(t.dcIp)
     log('info', `dc ip list: ${dcIp.join(', ')}`)
 
     // 3) Port pre-check (kill stale instance if needed)
@@ -236,28 +287,41 @@ async function startTgwsImpl(): Promise<void> {
     if (isColdBoot()) {
       void waitForNetwork(dcIpsToTargets(dcIp))
         .then(() => log('info', 'upstream DC reachable'))
-        .catch(() => log('warn', 'upstream DC sanity check timed out — proxy still serving locally'))
+        .catch(() =>
+          log('warn', 'upstream DC sanity check timed out — proxy still serving locally')
+        )
     }
 
     // 5) Spawn binary ------------------------------------------------------
-    const args: string[] = [
-      '--host', t.host,
-      '--port', String(t.port),
-      '--secret', secret
-    ]
+    const args: string[] = ['--host', t.host, '--port', String(t.port), '--secret', secret]
     for (const d of dcIp) args.push('--dc-ip', d)
     if (t.bufKb) args.push('--buf-kb', String(t.bufKb))
     if (t.poolSize) args.push('--pool-size', String(t.poolSize))
     if (t.verbose) args.push('-v')
     if (t.cfproxy === false) args.push('--no-cfproxy')
-    if (t.cfproxyUserDomain) args.push('--cfproxy-domain', t.cfproxyUserDomain)
+    for (const domain of splitDomains(t.cfproxyUserDomain)) args.push('--cfproxy-domain', domain)
+    for (const domain of splitDomains(t.cfproxyWorkerDomain))
+      args.push('--cfproxy-worker-domain', domain)
     if (t.fakeTlsDomain) args.push('--fake-tls-domain', t.fakeTlsDomain)
+    if (t.proxyProtocol) args.push('--proxy-protocol')
+    if (t.logFile) args.push('--log-file', t.logFile)
+    if (t.logMaxMb) args.push('--log-max-mb', String(t.logMaxMb))
+    if (t.logBackups) args.push('--log-backups', String(t.logBackups))
 
     log('info', `spawning: ${bin} ${args.join(' ')}`)
     child = spawn(bin, args, { windowsHide: true })
 
-    child.stdout?.on('data', (buf) => log('info', buf.toString().trimEnd()))
-    child.stderr?.on('data', (buf) => log('warn', buf.toString().trimEnd()))
+    let processOutput = ''
+    let childFailure: string | undefined
+    const captureOutput = (buf: Buffer, type: ControllerLog['type']): void => {
+      const text = buf.toString().trimEnd()
+      if (!text) return
+      processOutput = `${processOutput}\n${text}`.slice(-4096)
+      log(type, text)
+    }
+
+    child.stdout?.on('data', (buf: Buffer) => captureOutput(buf, 'info'))
+    child.stderr?.on('data', (buf: Buffer) => captureOutput(buf, 'warn'))
     child.on('error', (err) => {
       log('error', `child error: ${err.message}`)
       setStatus({ state: 'error', lastError: err.message, pid: undefined })
@@ -269,13 +333,12 @@ async function startTgwsImpl(): Promise<void> {
       // a clean stop, regardless of the OS-level exit code (`taskkill /F`
       // returns code=1, not signal=SIGTERM, on Windows).
       const wasGraceful = stopRequested || code === 0 || signal === 'SIGTERM'
+      childFailure = wasGraceful ? undefined : describeTgwsExit(code, signal, processOutput)
       child = null
       setStatus({
         state: wasGraceful ? 'stopped' : 'error',
         pid: undefined,
-        lastError: wasGraceful
-          ? undefined
-          : (code != null ? `exited with code ${code}` : undefined)
+        lastError: wasGraceful ? undefined : code != null ? `exited with code ${code}` : undefined
       })
     })
 
@@ -283,7 +346,7 @@ async function startTgwsImpl(): Promise<void> {
     // either fails its bind() within tens of milliseconds or it's healthy.
     await new Promise((r) => setTimeout(r, 120))
     if (!child || child.exitCode != null) {
-      throw new Error('process died immediately after spawn')
+      throw new Error(childFailure ?? 'process died immediately after spawn')
     }
 
     setStatus({ state: 'running', pid: child.pid })
@@ -293,7 +356,11 @@ async function startTgwsImpl(): Promise<void> {
     log('error', `startup failed: ${msg}`)
     setStatus({ state: 'error', lastError: msg, pid: undefined })
     if (child) {
-      try { child.kill('SIGKILL') } catch { /* noop */ }
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        /* noop */
+      }
       child = null
     }
     throw e
@@ -335,7 +402,11 @@ async function stopTgwsImpl(): Promise<void> {
 
   if (process.platform !== 'win32' && proc.exitCode == null && !proc.killed) {
     log('warn', 'graceful stop timed out, sending SIGKILL')
-    try { proc.kill('SIGKILL') } catch { /* noop */ }
+    try {
+      proc.kill('SIGKILL')
+    } catch {
+      /* noop */
+    }
   }
 
   // Ensure UI status reflects reality even if the exit event was swallowed
