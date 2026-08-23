@@ -167,7 +167,13 @@ const TelegramPage: React.FC = () => {
         <Button
           variant="outline"
           size="sm"
-          onClick={handleCheckUpdate}
+          onClick={() => {
+            if (updateInfo?.assetUrl && !updateInfo.hasUpdate) {
+              void installUpdate()
+            } else {
+              void handleCheckUpdate()
+            }
+          }}
           disabled={checking || installing}
           className="h-8 gap-1.5"
         >
@@ -176,7 +182,9 @@ const TelegramPage: React.FC = () => {
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />
           )}
-          Обновить прокси
+          {updateInfo?.assetUrl && !updateInfo.hasUpdate
+            ? `Переустановить v${updateInfo.latest}`
+            : 'Обновить прокси'}
         </Button>
       }
     >

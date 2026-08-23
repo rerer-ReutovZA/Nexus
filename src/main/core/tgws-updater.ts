@@ -68,7 +68,7 @@ interface GhRelease {
 let cache: { at: number; data: TgwsUpdateInfo } | null = null
 let cacheHydrated = false
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000
-const CACHE_NAME = 'tgws'
+const CACHE_NAME = 'tgws-flowseal'
 
 function hydrateCacheFromDisk(): void {
   if (cacheHydrated) return
@@ -170,42 +170,6 @@ async function killStaleTgwsBinary(): Promise<void> {
   await new Promise((r) => setTimeout(r, 300))
 }
 
-async function validateTgwsBinary(bin: string): Promise<void> {
-  const result = await new Promise<{ code: number | null; output: string }>((resolve, reject) => {
-    const probe = spawn(bin, ['--help'], { windowsHide: true })
-    let output = ''
-    const collect = (chunk: Buffer): void => {
-      output = `${output}${chunk.toString()}`.slice(-4096)
-    }
-    const timeout = setTimeout(() => {
-      try {
-        probe.kill('SIGKILL')
-      } catch {
-        /* noop */
-      }
-      reject(new Error('проверка запуска превысила 10 секунд'))
-    }, 10_000)
-    probe.stdout?.on('data', collect)
-    probe.stderr?.on('data', collect)
-    probe.on('error', (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-    probe.on('exit', (code) => {
-      clearTimeout(timeout)
-      resolve({ code, output })
-    })
-  })
-  if (result.code === 0) return
-  if (/ModuleNotFoundError:\s*No module named ['"]certifi['"]/i.test(result.output)) {
-    throw new Error(
-      'официальный TgWsProxy v1.10.0 сейчас неработоспособен: в пакете отсутствует модуль certifi. Рабочий файл не был заменён.'
-    )
-  }
-  throw new Error(
-    `проверка нового TgWsProxy завершилась с кодом ${result.code ?? 'unknown'}: ${result.output.trim().slice(-500)}`
-  )
-}
 export async function installTgwsUpdate(
   assetUrl: string,
   expectedVersion?: string
@@ -238,19 +202,6 @@ export async function installTgwsUpdate(
   const dest = path.join(dir, 'TgWsProxy_windows.exe')
   const candidate = path.join(dir, `TgWsProxy_windows.pending-${Date.now()}.exe`)
   writeFileSync(candidate, buf)
-  try {
-    // A release can be downloaded successfully yet still be broken at startup.
-    // Validate it before touching the user's currently working executable.
-    await validateTgwsBinary(candidate)
-  } catch (e) {
-    try {
-      renameSync(candidate, `${candidate}.rejected`)
-    } catch {
-      /* noop */
-    }
-    throw e
-  }
-
   const cfg = await getAppConfig()
   const st = getTgwsStatus()
   const shouldRestart = st.state === 'running' || st.state === 'starting' || !!cfg.tgws?.autoStart

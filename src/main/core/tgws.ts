@@ -57,7 +57,7 @@ function describeTgwsExit(
   if (code === 0 || signal === 'SIGTERM') return undefined
   const details = output.trim()
   if (/ModuleNotFoundError:\s*No module named ['"]certifi['"]/i.test(details)) {
-    return 'TgWsProxy v1.10.0 не запускается: в официальном файле отсутствует модуль certifi. Восстановите встроенную версию и дождитесь исправленного релиза Flowseal.'
+    return 'TgWsProxy завершился из-за отсутствующего модуля certifi. Переустановите v1.10.0 из раздела Telegram, чтобы заменить устаревший бинарник.'
   }
   const exit =
     code != null ? `exited with code ${code}` : `stopped by ${signal ?? 'an unknown signal'}`
